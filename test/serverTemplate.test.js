@@ -169,7 +169,7 @@ test('imports are checked strictly', async () => {
   bad((t) => { t.assets['fake.png'] = { data: Buffer.from('<svg onload=alert(1)>').toString('base64') }; }, /PNG, JPEG/);
   bad((t) => { t.assets['icon.png'].sha256 = '0'.repeat(64); }, /checksum/);
   bad((t) => { t.roles[0].permissions.push('launch_missiles'); }, /unknown permission/);
-  bad((t) => { t.roles[0].name = 'x'.repeat(31); }, /roles\[0\]\.name/);
+  bad((t) => { t.roles[0].name = 'x'.repeat(101); }, /roles\[0\]\.name/);
   bad((t) => { t.server.settings.server_name = 'x'.repeat(33); }, /server_name/);
   bad((t) => { t.posts[0].channel = 'nowhere'; }, /unknown channel/);
   bad((t) => { t.webhooks[0].events = 'everything'; }, /events/);

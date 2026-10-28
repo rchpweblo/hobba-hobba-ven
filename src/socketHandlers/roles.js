@@ -607,8 +607,8 @@ module.exports = function register(socket, ctx) {
       return cb({ error: 'Only admins can create roles' });
     }
 
-    const name = isString(data.name, 1, 30) ? data.name.trim() : '';
-    if (!name) return cb({ error: 'Role name required (1-30 chars)' });
+    const name = isString(data.name, 1, 100) ? data.name.trim() : '';
+    if (!name) return cb({ error: 'Role name required (1-100 chars)' });
 
     const level = isInt(data.level) && data.level >= 0 && data.level <= 99 ? data.level : 25;
     const scope = data.scope === 'channel' ? 'channel' : 'server';
@@ -720,7 +720,7 @@ module.exports = function register(socket, ctx) {
       const updates = [];
       const values = [];
 
-      if (isString(data.name, 1, 30)) { updates.push('name = ?'); values.push(data.name.trim()); }
+      if (isString(data.name, 1, 100)) { updates.push('name = ?'); values.push(data.name.trim()); }
       if (isInt(data.level) && data.level >= 0 && data.level <= 99) { updates.push('level = ?'); values.push(data.level); }
       if (data.color !== undefined) {
         updates.push('color = ?'); values.push(safeRoleColor(data.color));

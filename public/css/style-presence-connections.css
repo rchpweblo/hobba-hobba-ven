@@ -1445,3 +1445,13 @@ html.reduce-motion .pa-marquee-track { animation: none; }
 .new-channel-more[open] > summary { margin-bottom: 4px; }
 .new-channel-more #new-channel-topic { width: 100%; box-sizing: border-box; margin: 2px 0 4px; font-size: 0.8rem; }
 .new-channel-more-hint { display: block; margin-top: 4px; opacity: 0.55; font-size: 0.72rem; line-height: 1.35; }
+
+/* Bizarre Bazaar fork: role names go up to 100 characters (Discord's limit),
+   so the badge beside a message author stops at a sensible width. Hovering
+   it still shows the full names. */
+.msg-role-badge {
+  display: inline-block;
+  max-width: 14em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

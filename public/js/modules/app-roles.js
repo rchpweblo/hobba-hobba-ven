@@ -264,7 +264,7 @@ _renderRoleDetail() {
     <div class="role-detail-scroll">
     <div class="role-detail-form">
       <label class="settings-label">${t('settings.admin.role_form.name')}</label>
-      <input type="text" class="settings-text-input" id="role-edit-name" value="${this._escapeHtml(role.name)}" maxlength="30">
+      <input type="text" class="settings-text-input" id="role-edit-name" value="${this._escapeHtml(role.name)}" maxlength="100">
       <label class="settings-label" style="margin-top:8px;">${t('settings.admin.role_form.level')}</label>
       <input type="number" class="settings-number-input" id="role-edit-level" value="${role.level}" min="0" max="99">
       <label class="settings-label" style="margin-top:8px;">${t('settings.admin.role_form.color')}</label>
@@ -445,7 +445,7 @@ _renderRoleDetail() {
   // Channel-access linkage and auto-assign are intentionally NOT copied;
   // both are rarely what an admin wants on a freshly cloned role.
   document.getElementById('duplicate-role-btn')?.addEventListener('click', async () => {
-    const defaultName = t('settings.admin.roles_copy_name', { name: role.name }).slice(0, 30);
+    const defaultName = t('settings.admin.roles_copy_name', { name: role.name }).slice(0, 100);
     const newName = await this._showPromptModal(t('settings.admin.roles_duplicate_title'), t('settings.admin.roles_duplicate_prompt'), defaultName);
     if (!newName || !newName.trim()) return;
     const trimmed = newName.trim().slice(0, 30);
@@ -922,7 +922,7 @@ _renderChannelRolesRoleDetail() {
     <div class="cr-role-form">
       <div class="cr-role-form-row">
         <label class="cr-role-label">${t('settings.admin.role_form.name')}</label>
-        <input type="text" class="settings-text-input" id="cr-role-name" value="${this._escapeHtml(role.name)}" maxlength="30">
+        <input type="text" class="settings-text-input" id="cr-role-name" value="${this._escapeHtml(role.name)}" maxlength="100">
       </div>
       <div class="cr-role-form-row cr-role-inline">
         <div>
