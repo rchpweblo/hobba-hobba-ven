@@ -47,6 +47,7 @@ const CHANNEL_FIELDS = [
   ['streams', 'streams_enabled', 'flag', null, true], ['music', 'music_enabled', 'flag', null, true], ['soundboard', 'soundboard_enabled', 'flag', null, true],
   ['reactions', 'reactions_enabled', 'flag', null, true], ['nsfw', 'is_nsfw', 'flag', null, false], ['sortAlphabetical', 'sort_alphabetical', 'flag', null, false],
   ['cleanupExempt', 'cleanup_exempt', 'flag', null, false], ['welcome', 'show_welcome', 'flag', null, false],
+  ['bazaarStaffTopics', 'bazaar_staff_topics', 'flag', null, false],
   ['slowMode', 'slow_mode_interval', 'range', [0, 3600], 0], ['voiceUserLimit', 'voice_user_limit', 'range', [0, 99], 0],
   ['afkMinutes', 'afk_timeout_minutes', 'range', [0, 1440], 0], ['codeRotationInterval', 'code_rotation_interval', 'range', [1, 10000], 60],
   ['notifications', 'notification_type', 'enum', ['default', 'announcement'], 'default'], ['voiceBitrate', 'voice_bitrate', 'enum', [0, 32, 64, 96, 128, 256, 512], 0],
@@ -188,7 +189,7 @@ async function exportTemplate(db, opts = {}) {
     const adminOnly = allowed.filter((p) => ADMIN_ONLY_PERMS.includes(p));
     if (adminOnly.length) warnings.push(`Left out ${adminOnly.join(', ')} from role ${r.name}: templates never hand out admin-only permissions`);
     return {
-      ref: roleRef.get(r.id), name: uniqueIn(roleNames, tidy(r.name, 30, 'Role'), 30), level: Math.min(99, Math.max(0, Math.round(Number(r.level) || 0))),
+      ref: roleRef.get(r.id), name: uniqueIn(roleNames, tidy(r.name, 100, 'Role'), 100), level: Math.min(99, Math.max(0, Math.round(Number(r.level) || 0))),
       scope: r.scope === 'channel' ? 'channel' : 'server', color: typeof r.color === 'string' && /^#[0-9a-fA-F]{3,6}$/.test(r.color) ? r.color : null,
       autoAssign: !!r.auto_assign, linkChannelAccess: !!r.link_channel_access, icon: r.icon ? await addAsset(r.icon) : null,
       maxUploadMb: Number.isInteger(r.max_upload_mb) && r.max_upload_mb >= 1 && r.max_upload_mb <= 102400 ? r.max_upload_mb : null,
@@ -346,7 +347,7 @@ function validateTemplate(input) {
     const adminOnly = allowed.filter((p) => ADMIN_ONLY_PERMS.includes(p));
     if (adminOnly.length) warnings.push(`Left out ${adminOnly.join(', ')} from role ${String(r.name).slice(0, 30)}: only the server admin can hand those out`);
     return {
-      ref: c.ref(r.ref, `${at}.ref`), name: c.name(r.name, 30, `${at}.name`), level: c.int(r.level, 0, 99, `${at}.level`, 25), scope: c.pick(r.scope, ['server', 'channel'], `${at}.scope`, 'server'),
+      ref: c.ref(r.ref, `${at}.ref`), name: c.name(r.name, 100, `${at}.name`), level: c.int(r.level, 0, 99, `${at}.level`, 25), scope: c.pick(r.scope, ['server', 'channel'], `${at}.scope`, 'server'),
       color: c.opt(r.color, (v) => (typeof v === 'string' && /^#[0-9a-fA-F]{3,6}$/.test(v) ? v : c.fail(`${at}.color`, 'expected a colour like #3498db'))),
       autoAssign: c.flag(r.autoAssign, `${at}.autoAssign`, false), linkChannelAccess: c.flag(r.linkChannelAccess, `${at}.linkChannelAccess`, false),
       icon: asset(r.icon, `${at}.icon`), maxUploadMb: c.int(r.maxUploadMb, 1, 102400, `${at}.maxUploadMb`, null), permissions: allowed.filter((p) => !ADMIN_ONLY_PERMS.includes(p)), denied: permsOf(r.denied, 'denied'),

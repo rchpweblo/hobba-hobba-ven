@@ -306,6 +306,10 @@ _bindChannelMenu() {
       const newVal = ch && Number(ch.forum_blog_pics_only) === 1 ? 0 : 1;
       optimistic({ forum_blog_pics_only: newVal });
       this.socket.emit('toggle-channel-permission', { code, permission: 'forum_blog_pics_only' });
+    } else if (fn === 'bazaar-staff-topics') {
+      const newVal = ch && Number(ch.bazaar_staff_topics) === 1 ? 0 : 1;
+      optimistic({ bazaar_staff_topics: newVal });
+      this.socket.emit('toggle-channel-permission', { code, permission: 'bazaar_staff_topics' });
     } else if (fn === 'forum-votes') {
       document.getElementById('channel-functions-panel').style.display = 'none';
       this._forumVotesEdit?.(code);

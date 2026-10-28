@@ -318,6 +318,13 @@ _channelBlocksPosting(code) {
   return !!(ch && ch.read_only === 1 && !ch.is_dm && !this.user?.isAdmin && !ch.canOverrideReadOnly);
 },
 
+// Staff-only new posts (Bizarre Bazaar fork): replies stay open, New Post does
+// not. The server decides (src/bazaarForum.js); this only hides the button.
+_channelBlocksNewPost(code) {
+  const ch = (this.channels || []).find(c => c.code === (code || this.currentChannel));
+  return !!(ch && ch.is_forum && !ch.is_dm && Number(ch.bazaar_staff_topics) === 1 && !this.user?.isAdmin && !ch.canOverrideReadOnly);
+},
+
 _applyReactionLock() {
   const allowed = this._channelAllowsReactions(this.currentChannel);
   const postBlocked = this._channelBlocksPosting(this.currentChannel);
@@ -381,6 +388,11 @@ _updateChannelFunctionsPanel(ch) {
     if (picsRow) picsRow.style.display = ch.is_forum && blogOn ? '' : 'none';
     const picsOn = Number(ch.forum_blog_pics_only) === 1;
     this._setCfnBadge('forum-blog-pics-only', picsOn, t(picsOn ? 'channel_functions.on' : 'channel_functions.off'));
+    // Staff-only new posts (Bizarre Bazaar fork, src/bazaarForum.js): forums only.
+    const staffRow = _cfnPanel?.querySelector('.cfn-row[data-fn="bazaar-staff-topics"]');
+    if (staffRow) staffRow.style.display = ch.is_forum ? '' : 'none';
+    const staffOn = Number(ch.bazaar_staff_topics) === 1;
+    this._setCfnBadge('bazaar-staff-topics', staffOn, t(staffOn ? 'channel_functions.on' : 'channel_functions.off'));
   }
   this._setCfnBadge('private', isPrivate, t(isPrivate ? 'channel_functions.on' : 'channel_functions.off'));
   const gateBadge = this._roleGateBadge(ch);

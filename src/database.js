@@ -13,6 +13,7 @@ const { migrateImportedAuthors } = require('./importAuthors');
 const forumUnread = require('./forumUnread');
 const { migrateForumVotes } = require('./forumVotes');
 const { migrateForumBlog } = require('./forumBlog');
+const { migrateBazaarForum } = require('./bazaarForum');
 const { migrateMessageNsfw } = require('./messageNsfw');
 const { convertPermissionThresholds } = require('./permissionThresholds');
 const { migrateBadges } = require('./badges');
@@ -1224,6 +1225,7 @@ function initDatabase() {
   migrateSelfDms(db, addColumn);
   migrateForumVotes(db, addColumn);
   migrateForumBlog(addColumn);
+  migrateBazaarForum(addColumn);
   migrateMessageNsfw(addColumn);
   db.exec(`
     CREATE TABLE IF NOT EXISTS dm_group_invites (

@@ -258,10 +258,13 @@ _forumToolbarEl(code) {
   const canSetDefault = this._forumCanManage();
   const layoutLocked = !!(this._forumLayoutOf(code) || {}).locked;
   const showViewControls = canSetDefault || !layoutLocked;
+  const newPostBlocked = this._channelBlocksNewPost?.(code);
   const chip = (tag) => `<button type="button" class="forum-tag-chip${p.tags.includes(tag.name) ? ' active' : ''}" data-tag="${this._escapeHtml(tag.name)}">${tag.emoji ? this._escapeHtml(tag.emoji) + ' ' : ''}${this._escapeHtml(tag.name)}</button>`;
   bar.innerHTML = `
     <div class="forum-toolbar-row">
-      <button type="button" class="btn-sm btn-accent forum-new-post" id="forum-new-post">✏️ ${t('forum.new_post')}</button>
+      ${newPostBlocked
+        ? `<span class="muted-text forum-staff-only-note">📌 ${t('forum.bazaar_staff_only_note')}</span>`
+        : `<button type="button" class="btn-sm btn-accent forum-new-post" id="forum-new-post">✏️ ${t('forum.new_post')}</button>`}
       <div class="forum-sort-view">
         <select id="forum-sort" class="forum-select" title="${t('forum.sort')}">
           <option value="active"${p.sort === 'active' ? ' selected' : ''}>${t('forum.sort_active')}</option>
@@ -294,7 +297,7 @@ _forumToolbarEl(code) {
       </select>
       ${p.tags.length ? `<button type="button" class="forum-tag-clear" id="forum-tag-clear">${t('forum.clear_tags')}</button>` : ''}
     </div>` : ''}`;
-  bar.querySelector('#forum-new-post').addEventListener('click', () => this._openForumComposer());
+  bar.querySelector('#forum-new-post')?.addEventListener('click', () => this._openForumComposer());
   bar.querySelector('#forum-sort').addEventListener('change', (e) => { this._setForumPrefs(code, { sort: e.target.value }); this._forumReload(); });
   bar.querySelectorAll('.forum-view-btn').forEach(b => b.addEventListener('click', () => {
     const next = this._setForumPrefs(code, { view: this._forumParseView(b.dataset.view) });

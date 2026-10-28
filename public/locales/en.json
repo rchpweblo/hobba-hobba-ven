@@ -4249,6 +4249,8 @@
     "forum_blog_hint": "Each post belongs to its author: only the author adds to the post itself, and everyone else's replies go under Comments",
     "forum_blog_pics_only": "Comments on pictures only",
     "forum_blog_pics_only_hint": "No general Comments section under blog posts: people comment on each picture instead",
+    "bazaar_staff_topics": "Staff-only new posts",
+    "bazaar_staff_topics_hint": "Only staff (the admin, and roles with Read-only override) start new posts; everyone can still reply inside existing posts",
     "nsfw": "NSFW",
     "nsfw_hint": "Mark this channel NSFW. Members can hide NSFW channels from their sidebar in Settings"
   },
@@ -4692,6 +4694,7 @@
   },
   "forum": {
     "new_post": "New Post",
+    "bazaar_staff_only_note": "Only staff start new posts here. Open a post to reply.",
     "post": "Post",
     "title": "Title",
     "title_placeholder": "What is this topic about?",

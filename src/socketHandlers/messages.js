@@ -7,6 +7,7 @@ const selfDestruct = require('../selfDestruct');
 const { applyTagsToMessage, applyTagsToFiles, fileTags, messageTags, setMessageTags, normalizeTagName, escapeLike, extractUploadPath, extractUploadPaths, effectiveLimits } = require('../uploadTags');
 const { votesFor, pieceVotesFor } = require('../forumVotes');
 const forumBlog = require('../forumBlog');
+const bazaarForum = require('../bazaarForum');
 const highlights = require('../messageHighlights');
 const quotes = require('../messageQuotes');
 const forumUnread = require('../forumUnread');
@@ -1330,6 +1331,7 @@ module.exports = function register(socket, ctx) {
     if (channel.read_only === 1 && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'read_only_override', channel.id)) {
       return socket.emit('error-msg', 'This channel is read-only');
     }
+    if (bazaarForum.blocksNewPost(db, channel.id, { userId: socket.user.id, isAdmin: socket.user.isAdmin }, userHasPermission)) return socket.emit('error-msg', bazaarForum.REFUSAL);
 
     // Strip @everyone / @here from senders who lack mention_everyone, so
     // unauthorized users can't trigger an everyone-mention notification.
@@ -1974,6 +1976,7 @@ module.exports = function register(socket, ctx) {
     if (channel.text_enabled === 0) return cb({ error: 'Text messages are disabled in this channel' });
     if (!hasChannelAccess(channel.id)) return cb({ error: 'Not a member of this channel' });
     if (channel.read_only === 1 && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'read_only_override', channel.id)) return cb({ error: 'This channel is read-only' });
+    if (bazaarForum.blocksNewPost(db, channel.id, { userId: socket.user.id, isAdmin: socket.user.isAdmin }, userHasPermission)) return cb({ error: bazaarForum.REFUSAL });
     const mute = activeMuteNotice(socket.user.id);
     if (mute) return cb({ error: mute });
     const wait = youngAccountWait(channel.id);
@@ -2046,6 +2049,7 @@ module.exports = function register(socket, ctx) {
           const chNow = db.prepare('SELECT id, read_only, text_enabled, role_gate FROM channels WHERE id = ?').get(row.channel_id);
           if (!chNow || chNow.text_enabled === 0) continue;
           if (!author.is_admin && chNow.read_only === 1 && !userHasPermission(author.id, 'read_only_override', chNow.id)) continue;
+          if (bazaarForum.blocksNewPost(db, chNow.id, { userId: author.id, isAdmin: !!author.is_admin }, userHasPermission)) continue;
           if (!author.is_admin && !ctx.roleGateAllows(author.id, chNow)) continue;
           // A scheduled "@silent" message goes out silent too.
           const sched = takeSilent(row.content);
@@ -2784,6 +2788,7 @@ module.exports = function register(socket, ctx) {
       if (channel.read_only === 1 && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'read_only_override', channel.id)) {
         return socket.emit('error-msg', 'This channel is read-only');
       }
+      if (bazaarForum.blocksNewPost(db, channel.id, { userId: socket.user.id, isAdmin: socket.user.isAdmin }, userHasPermission)) return socket.emit('error-msg', bazaarForum.REFUSAL);
       if (refuseYoungAccount(channel.id)) return;
       if (enforceAutomod([question, ...cleanOptions].join('\n'), { surface: 'message', channelId: channel.id })) return;
       const pollSlow = slowModeRefusal(channel.id);
