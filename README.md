@@ -1,5 +1,8 @@
 # ⬡ HAVEN
 
+> **This is the Bizarre Bazaar fork of Haven**, a modified version of the original project. See
+> [FORK-NOTICE.md](FORK-NOTICE.md) for what was changed and when.
+
 **A private Discord alternative that runs on your own machine.** No cloud, no company
 account, no telemetry, no paid tier. Free forever.
 
