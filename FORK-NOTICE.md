@@ -43,3 +43,8 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   list, although one held in a channel opens that channel's lock, so saving the editor quietly
   removed them from the lock. They are listed now, marked "Channel".
   File: `public/js/modules/app-role-tools.js`.
+- **Discord threads can be imported into sub-channels.** When a Discord thread's own id is linked
+  to a Haven channel (`channels.discord_channel_id`), the Discord history importer writes the
+  thread's messages into that channel instead of making a Haven thread in its parent. This is how
+  chosen threads come over as sub-channels; every other thread still becomes a Haven thread.
+  File: `src/routes/import.js`. Test: `test/bazaarThreadChannel.test.js`.

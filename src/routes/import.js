@@ -747,7 +747,9 @@ module.exports = function registerImport(deps) {
 
       for (const { sel, channelData } of entries) {
         let parent = null;
-        if (channelData.kind === 'thread' && channelData.parentId) {
+        // Bizarre Bazaar fork: a thread linked to a Haven channel of its own
+        // (a sub-channel made for it) goes into that channel instead.
+        if (channelData.kind === 'thread' && channelData.parentId && !(channelData.discordId && channelByDiscordId.get(channelData.discordId))) {
           parent = channelByDiscordId.get(channelData.parentId);
           // Without it in Haven, the thread gets a channel of its own.
         }
