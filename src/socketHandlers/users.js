@@ -764,6 +764,7 @@ module.exports = function register(socket, ctx) {
       // hardened browsers that wipe local storage every session still honour a
       // prior dismissal instead of re-showing the modal on every login.
       'promo_seen_desktop', 'promo_seen_android', 'recovery_notice_seen',
+      'promo_seen_bazaar_discord', // Bizarre Bazaar fork: the Role Bot pop-up
       // The top-bar Android banner, closed once (#5594).
       'android_banner_seen',
       // Persisted localization. timezone is an IANA zone id (e.g.

@@ -56,3 +56,18 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   Files: `public/js/modules/app-channels.js`, `public/js/modules/app-role-tools.js`,
   `public/js/modules/app-channel-menu.js`, `public/app.html`, `public/locales/en.json`,
   `src/socketHandlers/channels.js`.
+- **The Role Bot.** A member can link their Discord account once, from a first-login pop-up or
+  Settings → Connections. Discord OAuth (the `identify` scope) says who they are; the Ferry bot
+  then reads their roles in the community's Discord server and Haven gives them the matching
+  roles, with channel-only roles given in their channels. Someone no longer in the Discord server
+  gets their roles from a snapshot. It only ever adds roles, and a Discord account links to one
+  Haven account. The rules (Discord role ids to Haven roles) live in the database, installed with
+  `tools/bazaar-role-rules.js`, so no community data is in this repository. It stays off until
+  `BAZAAR_DISCORD_CLIENT_ID`, `BAZAAR_DISCORD_CLIENT_SECRET`, the rules and a Ferry bot token
+  are all set.
+  Files: `src/bazaarRoleBot.js`, `src/bazaarDiscordLinkRoutes.js`,
+  `src/socketHandlers/bazaarRoleBot.js`, `tools/bazaar-role-rules.js`,
+  `public/js/modules/app-bazaar-role-bot.js`, with hooks in `server.js`, `src/database.js`,
+  `src/socketHandlers/index.js`, `src/socketHandlers/users.js`, `public/js/app.js`,
+  `public/js/modules/app-platform.js`, `public/app.html` and `public/locales/en.json`.
+  Test: `test/bazaarRoleBot.test.js`.

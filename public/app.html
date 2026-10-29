@@ -2328,6 +2328,8 @@
         <div id="connections-list">
           <small class="settings-hint" data-i18n="modals.common.loading">Loading…</small>
         </div>
+        <!-- Bizarre Bazaar fork: the Role Bot's Discord link (app-bazaar-role-bot.js) -->
+        <div id="bazaar-discord-connection" style="display:none;margin-top:6px"></div>
         <small class="settings-hint" style="display:block;margin-top:6px" data-i18n="settings.activity_section.connections_hint">Haven's own music player needs no connection. It shares automatically while you're listening in a voice channel.</small>
 
         <!-- Listening presence (any music player) -->
@@ -5320,6 +5322,22 @@
       </div>
       <label class="desktop-promo-dismiss-label">
         <input type="checkbox" id="desktop-promo-dismiss-check"> <span data-i18n="modals.desktop_promo.dont_show">Don't show this again</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Bizarre Bazaar fork: the Role Bot pop-up (app-bazaar-role-bot.js) -->
+  <div class="modal-overlay" id="bazaar-discord-modal" style="display:none">
+    <div class="modal desktop-promo">
+      <div class="desktop-promo-icon">🤖</div>
+      <h3 class="desktop-promo-title" data-i18n="bazaar_role_bot.popup_title">Get your Bizarre Bazaar roles back</h3>
+      <p class="desktop-promo-subtitle" data-i18n="bazaar_role_bot.popup_subtitle">Were you in Bizarre Bazaar on Discord? Link your Discord account and the Role Bot gives you your roles. It happens once.</p>
+      <div class="desktop-promo-actions">
+        <button id="bazaar-discord-link-now" class="btn btn-accent desktop-promo-install" data-i18n="bazaar_role_bot.link_now">Link Discord</button>
+        <button id="bazaar-discord-later" class="btn desktop-promo-later" data-i18n="bazaar_role_bot.not_now">Not now</button>
+      </div>
+      <label class="desktop-promo-dismiss-label">
+        <input type="checkbox" id="bazaar-discord-dismiss-check"> <span data-i18n="bazaar_role_bot.dont_show">Don't show this again</span>
       </label>
     </div>
   </div>

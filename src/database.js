@@ -15,6 +15,7 @@ const { migrateForumVotes } = require('./forumVotes');
 const { migrateForumBlog } = require('./forumBlog');
 const { migrateBazaarForum } = require('./bazaarForum');
 const { migrateBazaarRoleExclude } = require('./bazaarRoleExclude');
+const { migrateBazaarRoleBot } = require('./bazaarRoleBot');
 const { migrateMessageNsfw } = require('./messageNsfw');
 const { convertPermissionThresholds } = require('./permissionThresholds');
 const { migrateBadges } = require('./badges');
@@ -1228,6 +1229,7 @@ function initDatabase() {
   migrateForumBlog(addColumn);
   migrateBazaarForum(addColumn);
   migrateBazaarRoleExclude(addColumn);
+  migrateBazaarRoleBot(db);
   migrateMessageNsfw(addColumn);
   db.exec(`
     CREATE TABLE IF NOT EXISTS dm_group_invites (

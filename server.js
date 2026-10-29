@@ -853,6 +853,8 @@ app.use('/api/auth', authRoutes);
 // setupSocketHandlers, hence the getter (see activityRef below).
 const activityRef = { engine: null };
 const { createConnectRoutes, baseUrl } = require('./src/connectRoutes');
+// Bizarre Bazaar fork: Discord linking for the Role Bot, ahead of upstream's /connect.
+app.use('/connect/discord', require('./src/bazaarDiscordLinkRoutes').createDiscordLinkRoutes({ getDb: () => require('./src/database').getDb() }));
 app.use('/connect', createConnectRoutes(() => activityRef.engine));
 
 // ── Plugin & theme update endpoints (src/routes/extensionUpdates.js) ──

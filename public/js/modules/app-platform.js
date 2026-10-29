@@ -330,7 +330,9 @@ _initWelcomePopups() {
     }
   } catch { /* storage unavailable: nothing to carry over */ }
 
-  this._runWelcomePromoQueue();
+  // Bizarre Bazaar fork: the Role Bot pop-up needs to know first whether
+  // Discord linking is set up and done (app-bazaar-role-bot.js).
+  this._bazaarSetupRoleBot(() => this._runWelcomePromoQueue());
 },
 
 /** The app-promo sequencer. */
@@ -344,6 +346,14 @@ _runWelcomePromoQueue() {
   const isElectron = !!window.havenDesktop || navigator.userAgent.includes('Electron');
 
   const allEntries = [
+    // Bizarre Bazaar fork: link Discord to get your roles back, first in line.
+    {
+      id: 'bazaar_discord_link',
+      modalId: 'bazaar-discord-modal',
+      prefKey: 'promo_seen_bazaar_discord',
+      checkboxId: 'bazaar-discord-dismiss-check',
+      shouldShow: () => this._bazaarShouldShowPopup(),
+    },
     {
       id: 'desktop_app_promo',
       modalId: 'desktop-promo-modal',

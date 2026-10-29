@@ -4948,5 +4948,16 @@
       "none": "There are no hand-given badges yet. Make one in Settings, Admin, Badges.",
       "switched_off": "switched off"
     }
+  },
+  "bazaar_role_bot": {
+    "popup_title": "Get your Bizarre Bazaar roles back",
+    "popup_subtitle": "Were you in Bizarre Bazaar on Discord? Link your Discord account and the Role Bot gives you your roles. It happens once.",
+    "link_now": "Link Discord",
+    "not_now": "Not now",
+    "dont_show": "Don't show this again",
+    "row_hint": "link it to get your Bizarre Bazaar roles",
+    "linked_as": "linked as @{{name}}, roles given",
+    "result_toast": "The Role Bot gave you {{count}} role(s)",
+    "result_none": "Discord linked. The Role Bot found no new roles to give you"
   }
 }
