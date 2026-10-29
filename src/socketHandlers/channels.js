@@ -941,6 +941,8 @@ module.exports = function register(socket, ctx) {
       const result = db.prepare(
         'INSERT INTO channels (name, code, created_by, parent_channel_id, position, is_private, expires_at, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
       ).run(name, code, socket.user.id, parentChannel.id, position, isPrivate, expiresAt, category);
+      // Bizarre Bazaar fork: the sub-channel form asks for voice off.
+      if (data.voiceEnabled === false) db.prepare('UPDATE channels SET voice_enabled = 0 WHERE id = ?').run(result.lastInsertRowid);
 
       const parentMembers = db.prepare('SELECT user_id FROM channel_members WHERE channel_id = ?').all(parentChannel.id);
       const membersToAdd = isPrivate ? [{ user_id: socket.user.id }] : parentMembers;

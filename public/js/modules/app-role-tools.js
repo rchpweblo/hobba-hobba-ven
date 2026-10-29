@@ -197,6 +197,8 @@ export default {
       { key: 'event', emoji: '🎉', fields: { temporary: true, duration: 24, addAllMembers: true } },
       { key: 'slow', emoji: '🐢', fields: { slowMode: 30 } },
       { key: 'text_only', emoji: '📝', fields: { voiceEnabled: false } },
+      // Bizarre Bazaar fork: voice is off by default, so a quick way to a voice channel.
+      { key: 'bazaar_voice', emoji: '🗣️', fields: { voiceEnabled: true } },
     ];
   },
 
@@ -259,7 +261,7 @@ export default {
       readOnly: !!el('new-channel-readonly')?.checked, announcement: !!f.announcement,
       slowMode: parseInt(el('new-channel-slowmode')?.value, 10) || 0,
       mediaEnabled: el('new-channel-media') ? el('new-channel-media').checked : true,
-      voiceEnabled: el('new-channel-voice') ? el('new-channel-voice').checked : true
+      voiceEnabled: el('new-channel-voice') ? el('new-channel-voice').checked : false
     };
   },
 
@@ -273,10 +275,11 @@ export default {
       slow.value = [...slow.options].some(o => o.value === want) ? want : '0';
     }
     if (el('new-channel-media')) el('new-channel-media').checked = f.mediaEnabled !== false;
-    if (el('new-channel-voice')) el('new-channel-voice').checked = f.voiceEnabled !== false;
+    // Bizarre Bazaar fork: voice is off unless a template turns it on.
+    if (el('new-channel-voice')) el('new-channel-voice').checked = f.voiceEnabled === true;
     // Opened when a template sets anything there, so it is not hidden.
     const more = el('new-channel-more');
-    if (more && (f.topic || f.readOnly || f.slowMode || f.mediaEnabled === false || f.voiceEnabled === false)) more.open = true;
+    if (more && (f.topic || f.readOnly || f.slowMode || f.mediaEnabled === false || f.voiceEnabled === true)) more.open = true;
   },
 
   _resetChannelTemplate() {

@@ -232,6 +232,7 @@
         "event": "Event (24h)",
         "slow": "Slow chat",
         "text_only": "Text only",
+        "bazaar_voice": "Voice channel",
         "delete_title": "Delete template",
         "delete_prompt": "Delete the saved template \"{{name}}\"?"
       }

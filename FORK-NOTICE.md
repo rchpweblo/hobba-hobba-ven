@@ -48,3 +48,11 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   thread's messages into that channel instead of making a Haven thread in its parent. This is how
   chosen threads come over as sub-channels; every other thread still becomes a Haven thread.
   File: `src/routes/import.js`. Test: `test/bazaarThreadChannel.test.js`.
+- **Voice channels look different, and voice starts off.** In the channel list a channel with
+  voice on shows 🗣️ instead of `#` (sub-channels instead of `↳`), the way forums show 🗂️.
+  In Create Channel the Voice box starts unticked and a "Voice channel" template ticks it; new
+  sub-channels start with voice off and Channel Functions turns it on. The server's own default
+  is unchanged, so anything else that creates channels behaves as upstream.
+  Files: `public/js/modules/app-channels.js`, `public/js/modules/app-role-tools.js`,
+  `public/js/modules/app-channel-menu.js`, `public/app.html`, `public/locales/en.json`,
+  `src/socketHandlers/channels.js`.

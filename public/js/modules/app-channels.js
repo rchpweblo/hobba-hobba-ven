@@ -594,7 +594,9 @@ _renderChannels() {
     const isAnnouncement = ch.notification_type === 'announcement';
     const isTemporary = !!ch.expires_at;
     const isTempVoice = !!ch.is_temp_voice;
-    const hashIcon = isSub ? (ch.is_private ? '🔒' : '↳') : (isTempVoice ? '🔊' : (isTemporary ? '⏱️' : (isAnnouncement ? '📢' : (ch.is_forum ? '🗂️' : (ch.is_nsfw ? '🔞' : '#')))));
+    // Bizarre Bazaar fork: a channel with voice on shows a speaking head.
+    const hasVoice = ch.voice_enabled !== 0 && ch.voice_enabled !== false;
+    const hashIcon = isSub ? (ch.is_private ? '🔒' : (hasVoice ? '🗣️' : '↳')) : (isTempVoice ? '🔊' : (isTemporary ? '⏱️' : (isAnnouncement ? '📢' : (ch.is_forum ? '🗂️' : (ch.is_nsfw ? '🔞' : (hasVoice ? '🗣️' : '#'))))));
     // NSFW channels stay out of sight when the user asked for that (phone in
     // public), except the one they are actually in.
     if (ch.is_nsfw && this._hideNsfw && this._hideNsfw() && ch.code !== this.currentChannel) el.style.display = 'none';

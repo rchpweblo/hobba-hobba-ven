@@ -902,7 +902,8 @@ _bindChannelMenu() {
       isPrivate,
       temporary,
       duration,
-      category
+      category,
+      voiceEnabled: false // Bizarre Bazaar fork: voice starts off; Channel Functions turns it on
     });
     modal.style.display = 'none';
   });
