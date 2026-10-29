@@ -373,7 +373,7 @@ class ModMode {
         'server-bar': 'left', 'sidebar': 'left', 'right-sidebar': 'right',
         'status-bar': 'bottom', 'voice-panel': 'right-sidebar'
       };
-      const defaultOrder = ['join', 'create', 'channels'];
+      const defaultOrder = ['events', 'join', 'create', 'channels']; // events: Bizarre Bazaar fork
       const existing = new Map();
       this.sections.forEach(s => existing.set(s.dataset.modId, s));
       defaultOrder.forEach(id => {

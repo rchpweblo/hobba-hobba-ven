@@ -1016,6 +1016,9 @@ app.put('/api/user/channel-prefs/muted', express.json({ limit: '16kb' }), (req, 
 });
 
 // ── ICE servers endpoint (STUN + optional TURN) ──────────
+// Bizarre Bazaar fork: TURN_URL may list several addresses, comma-separated,
+// such as the same relay over UDP and over TCP for networks that block UDP.
+const turnUrls = (v) => { const list = String(v).split(',').map(u => u.trim()).filter(Boolean); return list.length > 1 ? list : list[0]; };
 app.get('/api/ice-servers', (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   const user = token ? verifyToken(token) : null;
@@ -1089,13 +1092,13 @@ app.get('/api/ice-servers', (req, res) => {
       const expiry = Math.floor(Date.now() / 1000) + ttl;
       const username = `${expiry}:${user.username}`;
       const hmac = crypto.createHmac('sha1', turnSecret).update(username).digest('base64');
-      iceServers.push({ urls: turnUrl, username, credential: hmac });
+      iceServers.push({ urls: turnUrls(turnUrl), username, credential: hmac });
     } else if (turnUser && turnPass) {
       // Static TURN credentials
-      iceServers.push({ urls: turnUrl, username: turnUser, credential: turnPass });
+      iceServers.push({ urls: turnUrls(turnUrl), username: turnUser, credential: turnPass });
     } else {
       // TURN URL with no auth (uncommon but possible)
-      iceServers.push({ urls: turnUrl });
+      iceServers.push({ urls: turnUrls(turnUrl) });
     }
   }
   }
@@ -1643,6 +1646,9 @@ app.post('/api/upload-server-banner', uploadLimiter, uploadDiskGuard, (req, res)
     res.json({ url: bannerUrl });
   });
 });
+
+// Bizarre Bazaar fork: cover images for scheduled events.
+require('./src/bazaarEventImageRoute').registerBazaarEventImageRoute(app, { upload, uploadLimiter, uploadDiskGuard, storage, verifyToken, getDb: () => require('./src/database').getDb() });
 
 // ── GIF endpoint rate limiting (per IP) ──────────────────
 const gifLimitStore = new Map();

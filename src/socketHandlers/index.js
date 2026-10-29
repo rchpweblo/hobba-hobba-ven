@@ -72,6 +72,7 @@ const registerModCases = require('./modCases');
 const registerPermExceptions = require('./permExceptions');
 const registerBazaarRoleExclude = require('./bazaarRoleExclude');
 const registerBazaarRoleBot = require('./bazaarRoleBot');
+const registerBazaarEvents = require('./bazaarEvents');
 const modCases = require('../modCases');
 const { quietRecipients, pingedRecipients } = require('../pushMutes');
 const registerForumUnread = require('./forumUnread');
@@ -2968,6 +2969,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerPermExceptions(socket, ctx);
     registerBazaarRoleExclude(socket, ctx);
     registerBazaarRoleBot(socket, ctx);
+    registerBazaarEvents(socket, ctx);
     registerAdmin(socket, ctx);
     registerFerry(socket, ctx);
     registerGroupE2E(socket, ctx);
@@ -3117,6 +3119,8 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   // Bizarre Bazaar fork: what the Role Bot's link callback refreshes with (src/bazaarRoleBot.js).
   require('../bazaarRoleBot').attach({ io, db, roleRefresh, syncRoleGateMemberships });
+  // Bizarre Bazaar fork: scheduled events' clock and notifications (src/bazaarEvents.js).
+  require('../bazaarEvents').attach({ io, db, state, sendPushNotifications });
 
   // Handed back so server.js can mount the account-linking HTTP routes against
   // the same engine instance the socket layer is using.

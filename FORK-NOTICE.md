@@ -71,3 +71,24 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   `src/socketHandlers/index.js`, `src/socketHandlers/users.js`, `public/js/app.js`,
   `public/js/modules/app-platform.js`, `public/app.html` and `public/locales/en.json`.
   Test: `test/bazaarRoleBot.test.js`.
+- **Scheduled events.** An Events section above Join a Channel lists upcoming and live events.
+  An event has a name, description, start and optional end, cover image, and a place: a channel
+  or somewhere else. It can repeat (weekly, every other week, monthly on the nth weekday, yearly,
+  every weekday), keeping its wall-clock time in its own time zone across clock changes. People
+  mark themselves Interested. Two new role permissions, Create Events and Manage Events, checked in
+  the event's channel. A channel event starts when someone allowed presses Start; everyone
+  Interested gets a pop-up with a Join button, and a push notification when away. An event
+  somewhere else starts and ends at its times. A live event ends at its end time, or with no end
+  time after 30 minutes with nobody in voice (24 hours at most); a channel event nobody started is
+  missed after 12 hours; a repeating event then moves to its next date. Discord's scheduled events
+  can be copied with `tools/bazaar-discord-events.js`; people Interested there become Interested
+  here when they link Discord for the Role Bot.
+  Files: `src/bazaarEvents.js`, `src/bazaarEventTime.js`, `src/bazaarEventImageRoute.js`,
+  `src/socketHandlers/bazaarEvents.js`, `tools/bazaar-discord-events.js`,
+  `public/js/modules/app-bazaar-events.js`, with hooks in `server.js`, `src/database.js`,
+  `src/socketHandlers/index.js`, `src/socketHandlers/helpers.js`, `src/bazaarDiscordLinkRoutes.js`,
+  `public/app.html`, `public/js/app.js`, `public/js/modmode.js`,
+  `public/js/modules/perm-catalog.js`, `public/js/modules/app-perm-matrix.js` and
+  `public/locales/en.json`. Tests: `test/bazaarEvents.test.js`, `test/bazaarEventTime.test.js`.
+- **Several TURN addresses.** `TURN_URL` may list addresses separated by commas, such as the same
+  relay over UDP and over TCP for networks that block UDP. File: `server.js`.

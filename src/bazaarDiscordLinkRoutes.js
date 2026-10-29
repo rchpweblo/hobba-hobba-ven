@@ -160,6 +160,8 @@ function createDiscordLinkRoutes({ getDb, fetchImpl = fetch } = {}) {
       const result = bot.linkAndGrant(req.db, userId, { discordId: me.id, discordUsername: me.username, memberRoles });
       if (result.error) return failPage(res, result.error);
       bot.refreshAfterGrant(userId, { ...result, discordUsername: me.username });
+      // Interested in a copied Discord event there, so Interested here too.
+      try { require('./bazaarEvents').claimDiscordInterest(req.db, userId, String(me.id)); } catch (err) { console.warn('[role-bot] event interest carry-over failed:', err.message); }
       console.log(`[role-bot] user ${userId} linked Discord ${me.id} (${result.source}): ${result.given.length} role(s) given`);
       return resultPage(res, result);
     } catch (err) {

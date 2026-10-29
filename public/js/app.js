@@ -68,6 +68,7 @@ import RoleAssignMethods from './modules/app-role-assign.js?v=4.26.16';
 import ModerationMethods from './modules/app-moderation.js?v=4.27.9';
 import PlatformMethods from './modules/app-platform.js?v=4.27.16';
 import BazaarRoleBotMethods from './modules/app-bazaar-role-bot.js?v=bazaar-1'; // Bizarre Bazaar fork
+import BazaarEventMethods from './modules/app-bazaar-events.js?v=bazaar-1'; // Bizarre Bazaar fork
 import SearchMethods   from './modules/app-search.js?v=4.24.32';
 import FerryMethods    from './modules/app-ferry.js?v=4.24.10';
 import ForumMethods    from './modules/app-forum.js?v=4.27.13';
@@ -459,6 +460,7 @@ class HavenApp {
     this._initDesktopAppBanner();
     this._initAndroidBetaBanner();
     this._initWelcomePopups();
+    this._bazaarSetupEvents(); // Bizarre Bazaar fork
     this._initMoveMessages();
     this._initMoveToThread();
 
@@ -613,6 +615,7 @@ Object.assign(HavenApp.prototype,
   ModerationMethods,
   PlatformMethods,
   BazaarRoleBotMethods,
+  BazaarEventMethods,
   SearchMethods,
   FerryMethods,
   ForumMethods,

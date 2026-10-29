@@ -188,7 +188,9 @@ const VALID_ROLE_PERMS = [
   'view_all_members', 'view_all_channels', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue',
   'manage_tags', 'manage_badges',
   'promote_user', 'transfer_admin', 'manage_roles', 'manage_server', 'delete_channel', 'read_only_override',
-  'view_audit_log', 'manage_display_names', 'highlight_messages'
+  'view_audit_log', 'manage_display_names', 'highlight_messages',
+  // Bizarre Bazaar fork: scheduled events (src/bazaarEvents.js)
+  'create_events', 'manage_events'
 ];
 // Permissions only the server admin may hand out: the socket handlers keep
 // them out of reach of non-admins, and server templates never import them.

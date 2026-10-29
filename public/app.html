@@ -77,6 +77,18 @@
             </div>
           </div>
 
+          <!-- Bizarre Bazaar fork: scheduled events (app-bazaar-events.js) -->
+          <div class="sidebar-section" data-mod-id="events" id="bazaar-events-section">
+            <h5 class="section-label collapsible-section-toggle" id="bazaar-events-toggle" style="cursor:pointer;user-select:none;display:flex;align-items:center">
+              <span class="collapse-toggle-arrow" id="bazaar-events-arrow">▾</span>
+              <span class="section-label-text"><span data-i18n="bazaar_events.section">Events</span> <span id="bazaar-events-count"></span></span>
+              <button type="button" class="btn-sm" id="bazaar-events-new" style="display:none" data-i18n-title="bazaar_events.new_title" title="New event">+</button>
+            </h5>
+            <div class="collapsible-section-body" id="bazaar-events-body">
+              <div id="bazaar-events-list"></div>
+            </div>
+          </div>
+
           <div class="sidebar-section" data-mod-id="join" data-haven-region="join-channel">
             <h5 class="section-label collapsible-section-toggle" id="join-section-toggle" style="cursor:pointer;user-select:none">
               <span class="collapse-toggle-arrow" id="join-section-arrow">▾</span>

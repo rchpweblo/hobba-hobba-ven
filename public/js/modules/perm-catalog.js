@@ -22,7 +22,9 @@ export const ALL_PERMS = [
   'view_all_members', 'view_all_channels', 'view_channel_members', 'manage_emojis', 'manage_stickers', 'manage_soundboard', 'manage_music_queue', 'manage_tags', 'manage_badges', 'promote_user',
   'manage_roles', 'manage_server', 'delete_channel', 'read_only_override', 'view_audit_log', 'manage_display_names',
   // Post as your role: a coloured mark and badge on the message.
-  'highlight_messages'
+  'highlight_messages',
+  // Bizarre Bazaar fork: scheduled events
+  'create_events', 'manage_events'
 ];
 // Permissions only the server owner (admin) may grant. Highlighted in the
 // role editors and locked for non-admins; mirrors adminOnlyPerms in
@@ -47,6 +49,8 @@ export const PERM_LABELS = {
   get manage_channel_settings() { return t('permissions.manage_channel_settings'); },
   get create_channel() { return t('permissions.create_channel'); },
   get create_temp_channel() { return t('permissions.create_temp_channel'); },
+  get create_events() { return t('permissions.create_events'); },
+  get manage_events() { return t('permissions.manage_events'); },
   get invite_users() { return t('permissions.invite_users'); },
   get upload_files() { return t('permissions.upload_files'); },
   get use_voice() { return t('permissions.use_voice'); },
