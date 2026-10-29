@@ -177,9 +177,11 @@ test.before(async () => {
   process.env.PUBLIC_URL = base;
 });
 test.after(() => {
-  server && server.close();
+  if (server) { server.closeAllConnections(); server.close(); } // fetch keeps connections alive
   db.close();
   fs.rmSync(process.env.HAVEN_DATA_DIR, { recursive: true, force: true });
+  // auth.js keeps timers running; as in bazaarThreadChannel.test.js.
+  setImmediate(() => process.exit(0));
 });
 
 const press = (token) => fetch(`${base}/connect/discord/go`, {
