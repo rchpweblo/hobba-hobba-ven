@@ -92,3 +92,6 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   `public/locales/en.json`. Tests: `test/bazaarEvents.test.js`, `test/bazaarEventTime.test.js`.
 - **Several TURN addresses.** `TURN_URL` may list addresses separated by commas, such as the same
   relay over UDP and over TCP for networks that block UDP. File: `server.js`.
+- **Category headers lit while open.** An open category header is highlighted and a collapsed one
+  is dark, the reverse of upstream, so a lit header means its channels are showing.
+  File: `public/css/style-sidebar.css`.

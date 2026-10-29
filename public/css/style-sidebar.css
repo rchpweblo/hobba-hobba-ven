@@ -669,8 +669,9 @@
 .pip-input-emoji-btn .tb-icon { display: inline-flex; align-items: center; justify-content: center; }
 .pip-input-emoji-btn .tb-icon-emoji { font-size: 1.125rem; }
 .pip-input-emoji-btn svg { width: 1.25rem; height: 1.25rem; display: block; }
-/* Category headers read as buttons: dark while open, lit while collapsed
-   (#5756). The inline styles from the sidebar renderer are overridden here. */
+/* Category headers read as buttons (#5756). The inline styles from the
+   sidebar renderer are overridden here. Bizarre Bazaar fork: lit while open,
+   dark while collapsed (upstream lights the collapsed ones). */
 .category-label.cat-pill {
   margin: 6px 8px 2px;
   padding: 4px 8px !important;
@@ -680,7 +681,7 @@
   opacity: 0.85 !important;
 }
 .category-label.cat-pill:hover { opacity: 1 !important; border-color: var(--border-light, var(--border)); }
-.category-label.cat-pill.cat-collapsed {
+.category-label.cat-pill:not(.cat-collapsed) {
   opacity: 1 !important;
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
