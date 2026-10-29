@@ -32,7 +32,7 @@ function main() {
       if (dry) db.exec('BEGIN');
       const counts = bot.installRules(db, input);
       if (dry) { db.exec('ROLLBACK'); console.log('Dry run, nothing stored.'); }
-      console.log(`Rules ${dry ? 'would be' : ''} installed: ${counts.roles} Discord roles mapped, ${counts.channelOnly} channel-only roles, extra grants for ${counts.extra} people, snapshot of ${counts.snapshot} people.`);
+      console.log(`Rules ${dry ? 'would be ' : ''}installed: ${counts.roles} Discord roles mapped, ${counts.channelOnly} channel-only roles, extra grants for ${counts.extra} people, snapshot of ${counts.snapshot} people.`);
     } else if (cmd === 'show') {
       const rules = bot.readRules(db);
       console.log(rules ? `Rules installed for guild ${rules.guildId}: ${Object.keys(rules.roleMap).length} roles mapped, ${Object.keys(rules.channelOnly).length} channel-only, ${Object.keys(rules.snapshot).length} in the snapshot.` : 'No rules installed.');
