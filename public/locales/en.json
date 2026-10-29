@@ -5004,6 +5004,7 @@
     "created": "Event created",
     "saved": "Event saved",
     "save_failed": "Could not save the event",
+    "nowhere": "There is no channel you can create an event in",
     "repeat_none": "Does not repeat",
     "repeat_weekly": "Weekly on {{day}}",
     "repeat_biweekly": "Every other {{day}}",

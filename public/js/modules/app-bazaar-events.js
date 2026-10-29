@@ -16,7 +16,7 @@ export default {
 
 _bazaarSetupEvents() {
   this._bazaarEvents = [];
-  this._bazaarEventCreate = { channels: [], elsewhere: false };
+  this._bazaarEventCanCreate = false;
   this._bazaarEventsStyle();
 
   const body = document.getElementById('bazaar-events-body');
@@ -47,7 +47,7 @@ _bazaarEventsFetch() {
   this.socket.emit('bazaar-events-list', {}, (r) => {
     if (!r || r.error) return;
     this._bazaarEvents = r.events || [];
-    this._bazaarEventCreate = r.create || { channels: [], elsewhere: false };
+    this._bazaarEventCanCreate = !!r.canCreate;
     this._bazaarEventsRender();
     if (this._bazaarOpenEventId) {
       const ev = this._bazaarEvents.find((e) => e.id === this._bazaarOpenEventId);
@@ -62,8 +62,7 @@ _bazaarEventsRender() {
   const add = document.getElementById('bazaar-events-new');
   if (!list) return;
   const evs = this._bazaarEvents || [];
-  const canCreate = !!(this._bazaarEventCreate.channels.length || this._bazaarEventCreate.elsewhere);
-  if (add) add.style.display = canCreate ? '' : 'none';
+  if (add) add.style.display = this._bazaarEventCanCreate ? '' : 'none';
   if (count) count.textContent = evs.length ? `(${evs.length})` : '';
   if (!evs.length) {
     list.innerHTML = `<div class="bz-ev-empty">${this._escapeHtml(T('none_yet'))}</div>`;
@@ -218,7 +217,14 @@ _bazaarEventLive(ev) {
 
 // ── Create and edit ──────────────────────────────────────────────────────
 _bazaarEventForm(ev) {
-  const opts = this._bazaarEventCreate || { channels: [], elsewhere: false };
+  this.socket.emit('bazaar-events-create-options', {}, (opts) => {
+    if (!opts || opts.error) return this._showToast(opts ? opts.error : T('save_failed'), 'error');
+    if (!ev && !opts.channels.length && !opts.elsewhere) return this._showToast(T('nowhere'), 'error');
+    this._bazaarEventFormOpen(ev, opts);
+  });
+},
+
+_bazaarEventFormOpen(ev, opts) {
   const overlay = this._bazaarEventModal('bazaar-event-form-modal');
   const box = overlay.querySelector('.modal');
   const esc = (s) => this._escapeHtml(String(s ?? ''));

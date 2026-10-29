@@ -16,11 +16,15 @@ module.exports = function register(socket, ctx) {
     }
   };
 
-  // The events this person can see, and where they may create one.
+  // The events this person can see, and whether to offer them New event.
+  // Clients ask again whenever their channel list changes, so this stays cheap.
   socket.on('bazaar-events-list', (_data, cb) => reply(cb, () => ({
     events: events.listFor(db, perm, me()),
-    create: events.createOptions(db, perm, me()),
+    canCreate: events.canCreateAnywhere(db, me().id),
   })));
+
+  // Where this person may put a new event, asked when the form opens.
+  socket.on('bazaar-events-create-options', (_data, cb) => reply(cb, () => events.createOptions(db, perm, me())));
 
   socket.on('bazaar-event-save', (data, cb) => reply(cb, () => {
     const r = events.saveEvent(db, perm, me(), data);
