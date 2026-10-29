@@ -5,7 +5,7 @@
 
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { occurrenceAfter, zonedToUtc, wallParts, validZone, nthWeekday } = require('../src/bazaarEventTime');
+const { occurrenceAfter, zonedToUtc, wallParts, validZone, nthWeekday, seriesDateNear } = require('../src/bazaarEventTime');
 
 const LA = 'America/Los_Angeles', LONDON = 'Europe/London';
 const Z = (iso) => Date.parse(iso);
@@ -58,6 +58,13 @@ test('a series long in the past gives its next date after now', () => {
 
 test('milliseconds in the first date are kept', () => {
   assert.equal(occurrenceAfter(Z('2026-10-25T02:00:00.250Z'), 'weekly', LA, Z('2026-10-25T02:00:00.250Z')) % 1000, 250);
+});
+
+test('a Discord series keeps its first local time: Icewind Dale stays at 6:21 pm', () => {
+  // First date Fri 14 Aug 2026, 6:21 pm PDT; Discord (UTC) shows Fri 6 Nov at 5:21 pm PST.
+  const at = seriesDateNear(Z('2026-08-15T01:21:00Z'), 'biweekly', LA, Z('2026-11-07T01:21:00Z'));
+  assert.equal(new Date(at).toISOString(), '2026-11-07T02:21:00.000Z'); // 6:21 pm PST, still every other Friday
+  assert.equal(seriesDateNear(Z('2026-11-07T02:21:00Z'), 'weekly', LA, Z('2026-11-07T01:21:00Z')), Z('2026-11-07T02:21:00Z'));
 });
 
 test('no repeat gives no next date', () => {

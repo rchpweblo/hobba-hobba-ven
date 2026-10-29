@@ -98,4 +98,15 @@ function occurrenceAfter(seriesStart, repeat, tz, afterMs) {
   return null;
 }
 
-module.exports = { REPEATS, DAY, validZone, wallParts, zonedToUtc, nthWeekday, occurrenceAfter };
+/**
+ * The date of the series that falls near `nearMs` (within a couple of hours).
+ * Used when copying from Discord, which repeats in UTC: its next date can sit
+ * an hour off the series' own local time after the clocks change.
+ */
+function seriesDateNear(seriesStart, repeat, tz, nearMs) {
+  const from = nearMs - 2 * 3600000;
+  if (seriesStart >= from) return seriesStart;
+  return occurrenceAfter(seriesStart, repeat, tz, from);
+}
+
+module.exports = { REPEATS, DAY, validZone, wallParts, zonedToUtc, nthWeekday, occurrenceAfter, seriesDateNear };

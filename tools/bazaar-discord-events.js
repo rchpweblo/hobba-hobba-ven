@@ -78,11 +78,15 @@ async function main() {
       if (!ch) { console.log(`- ${tag}: skipped, Discord channel ${e.channel_id} is not linked to a Haven channel yet`); continue; }
       channelId = ch.id;
     }
-    const startAt = Date.parse(e.scheduled_start_time);
-    const endAt = e.scheduled_end_time ? Date.parse(e.scheduled_end_time) : null;
     // Discord repeats in UTC, so its local time moves when the clocks change;
-    // Haven keeps local time. Start the series from the date Discord shows next.
-    const seriesStart = startAt;
+    // Haven keeps the local time of the series' first date (user, 2026-10-29:
+    // Icewind Dale is 6:21 pm, as it began). Its next date is the one of the
+    // series nearest the date Discord shows next.
+    const discordNext = Date.parse(e.scheduled_start_time);
+    const seriesStart = e.recurrence_rule && e.recurrence_rule.start ? Date.parse(e.recurrence_rule.start) : discordNext;
+    const startAt = repeat === 'none' ? discordNext : time.seriesDateNear(seriesStart, repeat, tz, discordNext);
+    if (!startAt) { console.log(`- ${tag}: skipped, could not work out its next date`); continue; }
+    const endAt = e.scheduled_end_time ? startAt + (Date.parse(e.scheduled_end_time) - discordNext) : null;
     const people = [];
     for (let after = '0'; ;) {
       const page = await api(`/guilds/${guild}/scheduled-events/${e.id}/users?limit=100&after=${after}`);
@@ -103,7 +107,8 @@ async function main() {
       } else console.log(`  ${tag}: the cover image could not be fetched, so it was left out`);
     }
     const where = channelId ? `#${db.prepare('SELECT name FROM channels WHERE id = ?').get(channelId).name}` : location;
-    if (dry) { console.log(`- ${tag}: would be copied (${where}, ${repeat}, ${people.length} interested${e.image ? ', with a cover' : ''})`); continue; }
+    const local = new Intl.DateTimeFormat('en-US', { timeZone: tz, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(startAt));
+    if (dry) { console.log(`- ${tag}: would be copied (${where}, next ${local}, ${repeat}, ${people.length} interested${e.image ? ', with a cover' : ''})`); continue; }
     db.transaction(() => {
       const id = db.prepare(`INSERT INTO bazaar_events (name, description, channel_id, location, start_at, end_at, series_start, repeat, tz, image, created_by, created_at, discord_event_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(String(e.name).slice(0, 100), String(e.description || '').slice(0, 1000), channelId, location,
@@ -119,7 +124,7 @@ async function main() {
         if (link) linkedNow += events.claimDiscordInterest(db, link.user_id, d);
       }
     }
-    console.log(`- ${tag}: copied (${where}, ${repeat}, ${people.length} interested on Discord, ${linkedNow} already here${image ? ', with its cover' : ''})`);
+    console.log(`- ${tag}: copied (${where}, next ${local}, ${repeat}, ${people.length} interested on Discord, ${linkedNow} already here${image ? ', with its cover' : ''})`);
   }
   db.close();
   console.log('Open Haven again (or reload it) to see copied events.');
