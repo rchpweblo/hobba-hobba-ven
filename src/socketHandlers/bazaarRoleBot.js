@@ -3,6 +3,7 @@
 // Bizarre Bazaar fork: the Role Bot's socket side (see src/bazaarRoleBot.js).
 
 const bot = require('../bazaarRoleBot');
+const refs = require('../bazaarDiscordRefs');
 
 module.exports = function register(socket, ctx) {
   const { db } = ctx;
@@ -14,6 +15,15 @@ module.exports = function register(socket, ctx) {
     try { callback(bot.linkState(db, socket.user.id)); } catch (err) {
       console.warn('[role-bot] link state failed:', err.message);
       callback({ configured: false, linked: false });
+    }
+  });
+
+  // Names for the Discord codes in copied history (src/bazaarDiscordRefs.js).
+  socket.on('bazaar-discord-refs', (_data, callback) => {
+    if (typeof callback !== 'function') return;
+    try { callback(refs.refsFor(db)); } catch (err) {
+      console.warn('[discord-refs] could not build the names:', err.message);
+      callback({ users: {}, roles: {}, channels: {} });
     }
   });
 

@@ -53,7 +53,7 @@ import MusicMethods from './modules/app-music.js?v=4.27.17';
 import MusicFileMethods from './modules/app-music-file.js?v=4.27.17';
 import MusicKeyMethods from './modules/app-music-keys.js?v=4.24.19';
 import UtilityMethods  from './modules/app-utilities.js?v=4.27.14';
-import MessageContentMethods from './modules/app-message-content.js?v=4.27.18';
+import MessageContentMethods from './modules/app-message-content.js?v=4.27.18-bazaar-1';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.25.2';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.25.6';
 import ThreadMethods from './modules/app-threads.js?v=4.27.20';
@@ -67,8 +67,9 @@ import RoleMethods from './modules/app-roles.js?v=4.27.14';
 import RoleAssignMethods from './modules/app-role-assign.js?v=4.26.16';
 import ModerationMethods from './modules/app-moderation.js?v=4.27.9';
 import PlatformMethods from './modules/app-platform.js?v=4.27.16';
-import BazaarRoleBotMethods from './modules/app-bazaar-role-bot.js?v=bazaar-1'; // Bizarre Bazaar fork
+import BazaarRoleBotMethods from './modules/app-bazaar-role-bot.js?v=bazaar-2'; // Bizarre Bazaar fork
 import BazaarEventMethods from './modules/app-bazaar-events.js?v=bazaar-1'; // Bizarre Bazaar fork
+import BazaarDiscordRefMethods from './modules/app-bazaar-discord-refs.js?v=bazaar-1'; // Bizarre Bazaar fork
 import SearchMethods   from './modules/app-search.js?v=4.24.32';
 import FerryMethods    from './modules/app-ferry.js?v=4.24.10';
 import ForumMethods    from './modules/app-forum.js?v=4.27.13';
@@ -616,6 +617,7 @@ Object.assign(HavenApp.prototype,
   PlatformMethods,
   BazaarRoleBotMethods,
   BazaarEventMethods,
+  BazaarDiscordRefMethods,
   SearchMethods,
   FerryMethods,
   ForumMethods,

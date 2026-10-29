@@ -95,3 +95,15 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
 - **Category headers lit while open.** An open category header is highlighted and a collapsed one
   is dark, the reverse of upstream, so a lit header means its channels are showing.
   File: `public/css/style-sidebar.css`.
+- **Discord mentions in copied history read as names.** History copied from Discord keeps
+  Discord's codes (`<@id>`, `<@&id>`, `<#id>`); the client shows them as names when it draws a
+  message, and the stored text is left alone. A person who linked Discord for the Role Bot shows
+  as their Haven name, a role in the Role Bot's rules as its Haven role, and a copied channel as a
+  link to it, for people who can see it. Anything else shows by its Discord name, looked up once
+  with `tools/bazaar-discord-names.js` (channels @everyone cannot see keep their names hidden).
+  Nobody is pinged.
+  Files: `src/bazaarDiscordRefs.js`, `tools/bazaar-discord-names.js`,
+  `public/js/modules/app-bazaar-discord-refs.js`, with hooks in `src/database.js`,
+  `src/socketHandlers/bazaarRoleBot.js`, `public/js/app.js`,
+  `public/js/modules/app-bazaar-role-bot.js`, `public/js/modules/app-message-content.js` and
+  `public/locales/en.json`. Test: `test/bazaarDiscordRefs.test.js`.

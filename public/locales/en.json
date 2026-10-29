@@ -5023,5 +5023,12 @@
     "nth_third": "third",
     "nth_fourth": "fourth",
     "nth_last": "last"
+  },
+  "bazaar_discord_refs": {
+    "from_discord": "From Discord",
+    "unknown_user": "unknown-user",
+    "deleted_role": "deleted-role",
+    "no_access": "no-access",
+    "unknown_channel": "unknown"
   }
 }

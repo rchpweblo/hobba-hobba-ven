@@ -254,7 +254,18 @@ _formatContent(str) {
     return ph('DEMOTE', idx);
   });
 
-  let html = this._escapeHtml(withEmotes);
+  // Bizarre Bazaar fork: <@id>, <@&id> and <#id> in history copied from
+  // Discord read as names (app-bazaar-discord-refs.js).
+  const discordRefs = [];
+  const withRefs = withEmotes.replace(/<(@!?|@&|#)(\d{15,25})>/g, (full, sigil, id) => {
+    const el = this._bazaarDiscordRefHtml && this._bazaarDiscordRefHtml(sigil === '@&' ? 'role' : sigil === '#' ? 'channel' : 'user', id);
+    if (!el) return full;
+    const idx = discordRefs.length;
+    discordRefs.push(el);
+    return ph('DREF', idx);
+  });
+
+  let html = this._escapeHtml(withRefs);
 
   // ── Colour spans: c#RRGGBB…#c and c#(R,G,B)…#c ──
   // Marked out before the link pass, so a closing #c is never swallowed into
@@ -691,6 +702,9 @@ _formatContent(str) {
   // ── Restore Discord emotes ──
   emotes.forEach((el, idx) => {
     html = html.replace(ph('DEMOTE', idx), () => el);
+  });
+  discordRefs.forEach((el, idx) => {
+    html = html.replace(ph('DREF', idx), () => el);
   });
 
   // ── Colour spans go back last, around whatever was rendered inside them ──

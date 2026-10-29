@@ -7,6 +7,7 @@ export default {
 // Loads whether linking is set up and done, then calls back. The pop-up queue
 // waits for this; with no answer in 3 s it treats linking as not set up.
 _bazaarSetupRoleBot(done) {
+  this._bazaarLoadDiscordRefs(); // names for Discord codes in copied history
   if (!this._bazaarRoleBotWired) {
     this._bazaarRoleBotWired = true;
     this.socket.on('bazaar-role-bot-result', (r) => {
