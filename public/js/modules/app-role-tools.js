@@ -110,7 +110,10 @@ export default {
     const chosen = new Set(gate ? gate.roles : []);
     const mode = gate ? gate.mode : 'any';
     this._roleEmit('get-roles', {}, (res) => {
-      const roles = (res.roles || []).filter(r => r.scope !== 'channel');
+      // Bizarre Bazaar fork: channel roles are listed too. One held in this
+      // channel opens its lock (src/roleGate.js), and leaving them out of
+      // the list dropped them from the lock whenever it was saved.
+      const roles = res.roles || [];
       const body = `<p class="settings-hint">${t('channel_functions.role_gate_hint')}</p>
         <div class="rg-mode">
           <label class="toggle-row"><span>${t('channel_functions.role_gate_any')}</span><input type="radio" name="rg-mode" value="any" ${mode === 'any' ? 'checked' : ''}></label>
@@ -118,7 +121,7 @@ export default {
         </div>
         <div class="rg-roles">${roles.length ? roles.map(r => `
           <label class="toggle-row">
-            <span><span class="role-color-dot" style="background:${this._roleFill(r, '#aaa')}"></span> ${this._escapeHtml(r.name)} <span class="muted-text">Lv.${r.level}</span></span>
+            <span><span class="role-color-dot" style="background:${this._roleFill(r, '#aaa')}"></span> ${this._escapeHtml(r.name)} <span class="muted-text">Lv.${r.level}${r.scope === 'channel' ? ` · ${t('settings.admin.roles_scope_channel')}` : ''}</span></span>
             <input type="checkbox" class="rg-role" value="${r.id}" ${chosen.has(r.id) ? 'checked' : ''}>
           </label>`).join('') : `<p class="muted-text">${t('settings.admin.roles_no_custom')}</p>`}</div>
         <small class="settings-hint">${t('channel_functions.role_gate_clear_hint')}</small>`;
@@ -133,6 +136,43 @@ export default {
             ch.role_gate = r.roleGate ? JSON.stringify(r.roleGate) : null;
             this._updateChannelFunctionsPanel?.(ch);
             this._showToast(t('channel_functions.role_gate_saved'), 'success');
+          });
+        }
+      });
+    });
+  },
+
+  // Bizarre Bazaar fork: roles this channel is hidden from (src/bazaarRoleExclude.js).
+  _roleExcludeOf(ch) {
+    try {
+      const v = typeof ch?.bazaar_role_exclude === 'string' ? JSON.parse(ch.bazaar_role_exclude) : ch?.bazaar_role_exclude;
+      return Array.isArray(v) ? v.map(Number).filter(n => n > 0) : [];
+    } catch { return []; }
+  },
+
+  _openRoleExcludeModal(code) {
+    const ch = this.channels.find(c => c.code === code);
+    if (!ch) return;
+    const chosen = new Set(this._roleExcludeOf(ch));
+    this._roleEmit('get-roles', {}, (res) => {
+      const roles = res.roles || [];
+      const body = `<p class="settings-hint">${t('channel_functions.bazaar_role_exclude_hint')}</p>
+        <div class="rg-roles">${roles.length ? roles.map(r => `
+          <label class="toggle-row">
+            <span><span class="role-color-dot" style="background:${this._roleFill(r, '#aaa')}"></span> ${this._escapeHtml(r.name)} <span class="muted-text">Lv.${r.level}${r.scope === 'channel' ? ` · ${t('settings.admin.roles_scope_channel')}` : ''}</span></span>
+            <input type="checkbox" class="rx-role" value="${r.id}" ${chosen.has(r.id) ? 'checked' : ''}>
+          </label>`).join('') : `<p class="muted-text">${t('settings.admin.roles_no_custom')}</p>`}</div>
+        <small class="settings-hint">${t('channel_functions.bazaar_role_exclude_clear_hint')}</small>`;
+      this._openToolModal({
+        title: `${t('channel_functions.bazaar_role_exclude')} · #${this._escapeHtml(ch.name)}`, body,
+        confirmText: t('settings.admin.roles_save'),
+        onConfirm: (ov) => {
+          const picked = [...ov.querySelectorAll('.rx-role:checked')].map(i => parseInt(i.value, 10));
+          this.socket.emit('bazaar-set-channel-role-exclude', { code, roles: picked }, (r) => {
+            if (r?.error) return this._showToast(r.error, 'error');
+            ch.bazaar_role_exclude = r.roles && r.roles.length ? JSON.stringify(r.roles) : null;
+            this._updateChannelFunctionsPanel?.(ch);
+            this._showToast(t('channel_functions.bazaar_role_exclude_saved'), 'success');
           });
         }
       });

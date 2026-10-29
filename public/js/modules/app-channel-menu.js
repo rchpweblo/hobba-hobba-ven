@@ -358,6 +358,8 @@ _bindChannelMenu() {
       this.socket.emit('set-notification-type', { code, type: newType });
     } else if (fn === 'role-gate') {
       this._openRoleGateModal(code);
+    } else if (fn === 'bazaar-role-exclude') {
+      this._openRoleExcludeModal(code);
     } else if (fn === 'save-template') {
       this._saveChannelAsTemplate(code);
     } else if (fn === 'default-role') {

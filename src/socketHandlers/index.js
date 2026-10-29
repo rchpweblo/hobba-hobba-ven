@@ -70,6 +70,7 @@ const registerGameActivity = require('./gameActivity');
 const registerMessageHighlights = require('./messageHighlights');
 const registerModCases = require('./modCases');
 const registerPermExceptions = require('./permExceptions');
+const registerBazaarRoleExclude = require('./bazaarRoleExclude');
 const modCases = require('../modCases');
 const { quietRecipients, pingedRecipients } = require('../pushMutes');
 const registerForumUnread = require('./forumUnread');
@@ -501,7 +502,7 @@ function setupSocketHandlers(io, db, opts = {}) {
                c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
                c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.reactions_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
                c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
-               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout, c.forum_votes, c.forum_blog, c.forum_blog_pics_only, c.bazaar_staff_topics
+               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout, c.forum_votes, c.forum_blog, c.forum_blog_pics_only, c.bazaar_staff_topics, c.bazaar_role_exclude
         FROM channels c WHERE c.is_dm = 0
         UNION
         SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm, c.is_group,
@@ -509,7 +510,7 @@ function setupSocketHandlers(io, db, opts = {}) {
                c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
                c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.reactions_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
                c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
-               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout, c.forum_votes, c.forum_blog, c.forum_blog_pics_only, c.bazaar_staff_topics
+               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout, c.forum_votes, c.forum_blog, c.forum_blog_pics_only, c.bazaar_staff_topics, c.bazaar_role_exclude
         FROM channels c
         JOIN channel_members cm ON c.id = cm.channel_id
         WHERE cm.user_id = ? AND c.is_dm = 1
@@ -526,7 +527,7 @@ function setupSocketHandlers(io, db, opts = {}) {
                c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
                c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.reactions_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
                c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
-               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout, c.forum_votes, c.forum_blog, c.forum_blog_pics_only, c.bazaar_staff_topics
+               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout, c.forum_votes, c.forum_blog, c.forum_blog_pics_only, c.bazaar_staff_topics, c.bazaar_role_exclude
         FROM channels c
         JOIN channel_members cm ON c.id = cm.channel_id
         WHERE cm.user_id = ?
@@ -573,7 +574,7 @@ function setupSocketHandlers(io, db, opts = {}) {
                      c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
                      c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.reactions_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
                      c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
-                     c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout, c.forum_votes, c.forum_blog, c.forum_blog_pics_only, c.bazaar_staff_topics
+                     c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout, c.forum_votes, c.forum_blog, c.forum_blog_pics_only, c.bazaar_staff_topics, c.bazaar_role_exclude
               FROM channels c
               JOIN channel_members cm ON c.id = cm.channel_id
               WHERE cm.user_id = ?
@@ -587,6 +588,8 @@ function setupSocketHandlers(io, db, opts = {}) {
     // A role gate hides the channel from anyone who fails it, membership or
     // not. Admins see everything, as they do for private channels.
     if (!isAdmin) channels = channels.filter(ch => ch.is_dm || roleGateAllows(userId, ch));
+    // Bizarre Bazaar fork: which roles a channel is hidden from is the admin's business.
+    if (!isAdmin) channels.forEach(ch => { delete ch.bazaar_role_exclude; });
 
     if (channels.length > 0) {
       const channelIds = channels.map(c => c.id);
@@ -1121,7 +1124,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     // A channel's required roles (#5703): someone added by hand keeps their
     // membership when they lack the roles, but the channel is hidden from
     // them, so they are not listed in it either. Admins always pass.
-    const gated = !!(channel && !channel.is_dm && parseRoleGate(channel.role_gate));
+    const gated = !!(channel && !channel.is_dm && (parseRoleGate(channel.role_gate) || require('../bazaarRoleExclude').excludedRoles(db, channel).length));
     const adminIds = gated ? new Set(db.prepare('SELECT id FROM users WHERE is_admin = 1').all().map(r => r.id)) : null;
     const passesGate = (id) => !gated || adminIds.has(id) || roleGateAllows(id, channel);
     const memberIds = new Set();
@@ -2962,6 +2965,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerModeration(socket, ctx);
     registerRoles(socket, ctx);
     registerPermExceptions(socket, ctx);
+    registerBazaarRoleExclude(socket, ctx);
     registerAdmin(socket, ctx);
     registerFerry(socket, ctx);
     registerGroupE2E(socket, ctx);

@@ -92,7 +92,7 @@ module.exports = function register(socket, ctx) {
   // Holding the required roles is membership (#5649), so the rows follow the
   // roles; then leave the rooms they lost and push a fresh list either way.
   function syncRoleGateRooms(userId) {
-    const gated = db.prepare('SELECT id, code, role_gate FROM channels WHERE role_gate IS NOT NULL').all();
+    const gated = db.prepare('SELECT id, code, role_gate FROM channels WHERE role_gate IS NOT NULL OR bazaar_role_exclude IS NOT NULL').all();
     if (!gated.length) return;
     const row = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId);
     if (row && row.is_admin) return;
@@ -888,6 +888,7 @@ module.exports = function register(socket, ctx) {
       const rest = gate.roles.filter(r => r !== roleId);
       db.prepare('UPDATE channels SET role_gate = ? WHERE id = ?').run(rest.length ? JSON.stringify({ mode: gate.mode, roles: rest }) : null, ch.id);
     }
+    require('../bazaarRoleExclude').forgetRole(db, roleId);
     // Gates changed, so who is a member through them may have too (#5649).
     try { ctx.syncRoleGateMemberships(); } catch (err) { console.error('role gate membership sync failed:', err.message); }
     broadcastChannelLists();

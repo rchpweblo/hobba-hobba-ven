@@ -19,6 +19,8 @@ function parseRoleGate(raw) {
 }
 
 function roleGateAllows(db, userId, channel) {
+  // Bizarre Bazaar fork: roles the channel is hidden from (src/bazaarRoleExclude.js).
+  if (require('./bazaarRoleExclude').excludes(db, userId, channel)) return false;
   const gate = parseRoleGate(channel && channel.role_gate);
   if (!gate) return true;
   const held = new Set(

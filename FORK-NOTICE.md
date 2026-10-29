@@ -28,3 +28,18 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   `src/serverTemplate.js`, `public/js/modules/app-roles.js`, `test/serverTemplate.test.js`, plus
   a width cap on the role badge beside message authors in
   `public/css/style-presence-connections.css`.
+- **Hidden from roles.** Channel Functions → "Hidden from roles" (admin only). Anyone holding one
+  of the chosen roles, server-wide or in that channel, cannot see or open the channel, even if they
+  hold its required roles. The admin always can. This works like a Discord role with View Channel
+  denied. It's stored in `channels.bazaar_role_exclude` (a JSON list of role ids) and checked
+  inside `roleGateAllows`, so every place that honours required roles honours it too. Deleting a
+  role takes it off the list. Server templates don't carry it yet.
+  Files: `src/bazaarRoleExclude.js` and `src/socketHandlers/bazaarRoleExclude.js` (new), with
+  hooks in `src/roleGate.js`, `src/database.js`, `src/socketHandlers/index.js`,
+  `src/socketHandlers/roles.js`, `public/app.html`, `public/js/modules/app-channel-context.js`,
+  `public/js/modules/app-channel-menu.js`, `public/js/modules/app-role-tools.js` and
+  `public/locales/en.json`. Test: `test/bazaarRoleExclude.test.js`.
+- **Channel roles in the Required roles editor.** Upstream left channel-scoped roles out of the
+  list, although one held in a channel opens that channel's lock, so saving the editor quietly
+  removed them from the lock. They are listed now, marked "Channel".
+  File: `public/js/modules/app-role-tools.js`.

@@ -397,6 +397,11 @@ _updateChannelFunctionsPanel(ch) {
   this._setCfnBadge('private', isPrivate, t(isPrivate ? 'channel_functions.on' : 'channel_functions.off'));
   const gateBadge = this._roleGateBadge(ch);
   this._setCfnBadge('role-gate', gateBadge.on, gateBadge.text);
+  // Hidden from roles (Bizarre Bazaar fork, src/bazaarRoleExclude.js): the admin's call.
+  const excludeRow = document.querySelector('#channel-functions-panel .cfn-row[data-fn="bazaar-role-exclude"]');
+  if (excludeRow) excludeRow.style.display = (!ch.is_dm && this.user?.isAdmin) ? '' : 'none';
+  const excluded = this._roleExcludeOf?.(ch) || [];
+  this._setCfnBadge('bazaar-role-exclude', excluded.length > 0, excluded.length ? t('channel_functions.bazaar_role_exclude_badge', { count: excluded.length }) : t('channel_functions.off'));
   // Saving a template writes a server setting, so only manage_server holders see the row.
   const tplRow = document.querySelector('.cfn-row[data-fn="save-template"]');
   if (tplRow) tplRow.style.display = (!ch.is_dm && this._canSaveChannelTemplates()) ? '' : 'none';
