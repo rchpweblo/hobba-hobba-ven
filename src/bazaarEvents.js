@@ -301,7 +301,9 @@ function sweep(now = Date.now()) {
   let any = false;
   for (const ev of db.prepare("SELECT * FROM bazaar_events WHERE status IN ('scheduled', 'active')").all()) {
     if (ev.status === 'scheduled') {
-      if (!ev.channel_id && now >= ev.start_at) { startEvent(db, ev, 0, now); any = true; }
+      // One that also ended meanwhile (Haven was down) gets no "starting now".
+      if (!ev.channel_id && ev.end_at && now >= ev.end_at) { finish(db, ev, 'completed', now); any = true; }
+      else if (!ev.channel_id && now >= ev.start_at) { startEvent(db, ev, 0, now); any = true; }
       else if (ev.channel_id && now >= ev.start_at + MISSED_AFTER_MS) { finish(db, ev, 'canceled', now); any = true; }
       continue;
     }

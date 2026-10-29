@@ -80,7 +80,9 @@ async function main() {
     }
     const startAt = Date.parse(e.scheduled_start_time);
     const endAt = e.scheduled_end_time ? Date.parse(e.scheduled_end_time) : null;
-    const seriesStart = e.recurrence_rule && e.recurrence_rule.start ? Date.parse(e.recurrence_rule.start) : startAt;
+    // Discord repeats in UTC, so its local time moves when the clocks change;
+    // Haven keeps local time. Start the series from the date Discord shows next.
+    const seriesStart = startAt;
     const people = [];
     for (let after = '0'; ;) {
       const page = await api(`/guilds/${guild}/scheduled-events/${e.id}/users?limit=100&after=${after}`);

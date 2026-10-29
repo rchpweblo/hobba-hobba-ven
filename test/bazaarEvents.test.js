@@ -206,6 +206,14 @@ test('an event somewhere else starts and ends by itself', () => {
   assert.equal(ev(id).status, 'completed');
 });
 
+test('an event somewhere else that ended while Haven was down is closed without a pop-up', () => {
+  const id = events.saveEvent(db, perm, host, draft({ channelId: null, location: 'Minecraft', name: 'Missed while down', startAt: T0, endAt: T0 + HOUR })).event.id;
+  popups.length = 0;
+  events.sweep(T0 + 2 * HOUR);
+  assert.equal(ev(id).status, 'completed');
+  assert.ok(!popups.some((p) => p.payload && p.payload.id === id));
+});
+
 test('Skip moves a repeating event to its next date; a one-off cannot skip', () => {
   const weekly = events.saveEvent(db, perm, host, draft({ name: 'Skippable', repeat: 'biweekly' })).event.id;
   events.act(db, perm, host, weekly, 'skip');
