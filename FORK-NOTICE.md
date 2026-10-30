@@ -181,7 +181,8 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   Files: `src/bazaarFerrySync.js` (new), with hooks in `src/ferry.js`, `src/ferryReplies.js`,
   `src/database.js`, `src/socketHandlers/index.js` and `src/socketHandlers/messages.js`.
   Test: `test/bazaarFerrySync.test.js`, with delete and edit routes added to `test/fakeDiscord.js`.
-- **The voice bubble is half again as big**, and follows the reduced-motion setting when it
+- **The voice bubble is a little bigger** (half again as big, then trimmed by a quarter on the
+  user's word, so about an eighth bigger than release 10), and follows the reduced-motion setting when it
   scrolls to a channel. File: `public/js/modules/app-bazaar-voice-bubble.js`.
 - **Ferry copies Discord's files into Haven.** A message Ferry brings in from Discord is posted at
   once with Discord's links to its pictures and files, as upstream; then each file on Discord's
