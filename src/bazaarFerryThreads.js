@@ -44,4 +44,46 @@ function outboundTarget(db, channelId) {
   return links.length ? { threadId: String(ch.discord_channel_id), links } : null;
 }
 
-module.exports = { inboundChannel, outboundTarget };
+// ── Threads in paired chat channels ──
+// A Haven thread hangs from a top-level message; on Discord the same thread
+// is a thread on the Discord copy of that message. Which Discord thread a
+// Haven thread is, once known, is kept here, so replies written in Haven go
+// into it and replies written on Discord come back under the same message.
+
+function migrateBazaarFerryThreads(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS bazaar_ferry_chat_threads (
+      root_message_id   INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+      channel_id        INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      discord_thread_id TEXT    NOT NULL,
+      created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (root_message_id, discord_thread_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_bazaar_ferry_chat_threads_thread ON bazaar_ferry_chat_threads (discord_thread_id);
+  `);
+}
+
+function rememberThread(db, rootMessageId, channelId, discordThreadId) {
+  if (!SNOWFLAKE.test(String(discordThreadId || ''))) return;
+  db.prepare('INSERT OR IGNORE INTO bazaar_ferry_chat_threads (root_message_id, channel_id, discord_thread_id) VALUES (?, ?, ?)')
+    .run(rootMessageId, channelId, String(discordThreadId));
+}
+
+function forgetThread(db, discordThreadId) {
+  db.prepare('DELETE FROM bazaar_ferry_chat_threads WHERE discord_thread_id = ?').run(String(discordThreadId));
+}
+
+function threadOfRoot(db, rootMessageId) {
+  return db.prepare('SELECT discord_thread_id AS id FROM bazaar_ferry_chat_threads WHERE root_message_id = ? LIMIT 1').get(rootMessageId)?.id || null;
+}
+
+// The Haven message a Discord thread hangs from in one channel, when the
+// thread was started from Haven or joined to one before.
+function rootOfThread(db, channelId, discordThreadId) {
+  return db.prepare(`
+    SELECT t.root_message_id AS id FROM bazaar_ferry_chat_threads t JOIN messages m ON m.id = t.root_message_id
+    WHERE t.channel_id = ? AND t.discord_thread_id = ? AND m.thread_id IS NULL LIMIT 1
+  `).get(channelId, String(discordThreadId))?.id || null;
+}
+
+module.exports = { inboundChannel, outboundTarget, migrateBazaarFerryThreads, rememberThread, forgetThread, threadOfRoot, rootOfThread };

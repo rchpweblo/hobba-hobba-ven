@@ -18,6 +18,7 @@ const { migrateBazaarRoleExclude } = require('./bazaarRoleExclude');
 const { migrateBazaarRoleBot } = require('./bazaarRoleBot');
 const { migrateBazaarEvents } = require('./bazaarEvents');
 const { migrateBazaarDiscordRefs } = require('./bazaarDiscordRefs');
+const { migrateBazaarFerryThreads } = require('./bazaarFerryThreads');
 const { migrateMessageNsfw } = require('./messageNsfw');
 const { convertPermissionThresholds } = require('./permissionThresholds');
 const { migrateBadges } = require('./badges');
@@ -1234,6 +1235,7 @@ function initDatabase() {
   migrateBazaarRoleBot(db);
   migrateBazaarEvents(db);
   migrateBazaarDiscordRefs(db);
+  migrateBazaarFerryThreads(db);
   migrateMessageNsfw(addColumn);
   db.exec(`
     CREATE TABLE IF NOT EXISTS dm_group_invites (

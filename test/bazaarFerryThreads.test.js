@@ -173,5 +173,48 @@ test('a thread that is a sub-channel comes in and goes out there; thread replies
     assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM messages WHERE content = ?').get('balls gate reply').n, 1);
   });
 
+  const sentWith = (re) => discord.executions.find((e) => e.body && re.test(e.body.content || ''));
+  const threadReply = (parentId, content) => new Promise((res) => A.emit('send-thread-message', { parentId, content }, res));
+
+  await t.test('a reply in a Haven thread goes into a Discord thread made on the copy of its message', async () => {
+    A.emit('send-message', { code: vidya.code, content: 'who wants to play stellaris' });
+    const sent = await until(() => sentWith(/who wants to play stellaris/));
+    assert.ok(sent, 'the message reached Discord');
+    const copyId = sent.result.id;
+    const root = db.prepare('SELECT id FROM messages WHERE content = ?').get('who wants to play stellaris');
+    assert.ok(await until(() => db.prepare('SELECT 1 FROM ferry_message_map WHERE haven_message_id = ?').get(root.id)), 'its copy is known');
+
+    await threadReply(root.id, 'me first');
+    const reply = await until(() => sentWith(/^me first$/));
+    assert.ok(reply, 'the reply reached Discord');
+    assert.strictEqual(reply.threadId, copyId, 'into a thread on the copy');
+    assert.deepStrictEqual(discord.threadsMade.filter((x) => x.id === copyId).map((x) => x.name), ['who wants to play stellaris'], 'named after the message');
+
+    await threadReply(root.id, 'me too');
+    const second = await until(() => sentWith(/^me too$/));
+    assert.strictEqual(second.threadId, copyId);
+    assert.strictEqual(discord.threadsMade.filter((x) => x.id === copyId).length, 1, 'the thread is made once');
+
+    // A reply written on Discord comes back under the same Haven message.
+    discord.dispatch('THREAD_CREATE', discordThread(copyId, 'who wants to play stellaris'));
+    await wait(200);
+    discord.dispatch('MESSAGE_CREATE', discordMessage(discord.newId(), copyId, 'count me in'));
+    const back = await until(() => db.prepare('SELECT thread_id FROM messages WHERE content = ?').get('count me in'));
+    assert.ok(back, 'the Discord reply arrived');
+    assert.strictEqual(back.thread_id, root.id, 'in the Haven thread it started from');
+  });
+
+  await t.test('a reply under a thread copied from Discord goes into that thread', async () => {
+    discord.threads.set(OTHER_THREAD, { id: OTHER_THREAD, type: 11, parent_id: TEXT_ID, name: 'Balls Gate' });
+    const root = db.prepare('SELECT id FROM messages WHERE channel_id = ? AND discord_message_id = ? AND thread_id IS NULL').get(vidyaId, OTHER_THREAD);
+    assert.ok(root, 'the thread hangs from a line in Haven');
+    const made = discord.threadsMade.length;
+    await threadReply(root.id, 'balls gate from haven');
+    const sent = await until(() => sentWith(/^balls gate from haven$/));
+    assert.ok(sent, 'it reached Discord');
+    assert.strictEqual(sent.threadId, OTHER_THREAD);
+    assert.strictEqual(discord.threadsMade.length, made, 'no second thread');
+  });
+
   A.disconnect();
 });

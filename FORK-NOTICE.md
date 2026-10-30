@@ -131,3 +131,21 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   (say, "spam") every one after the first was written from the first one's messages and its
   own were lost. A pick with a Discord id is now matched by id alone.
   File: `src/routes/import.js`. Test: `test/bazaarCatchUp.test.js`.
+- **Thread replies in paired chat channels reach Discord.** Upstream Ferry sent thread replies
+  only for forum topics. A reply in a Haven thread of a paired chat channel now goes into the
+  Discord thread on the Discord copy of the message the thread hangs from, and the thread is
+  made there when it does not exist yet (named after the message). Replies written in that
+  Discord thread come back under the same Haven message. A message with no Discord copy keeps
+  its thread in Haven. Which Discord thread a Haven thread is lives in
+  `bazaar_ferry_chat_threads`.
+  Files: `src/bazaarFerryThreads.js`, with hooks in `src/database.js`, `src/ferry.js`,
+  `src/socketHandlers/index.js` and `server.js`. Test: `test/bazaarFerryThreads.test.js`, with
+  thread routes added to `test/fakeDiscord.js`.
+- **Voice bubble.** While a voice channel with people in it is scrolled out of the channel list,
+  or sits in a collapsed category, a small bubble pinned to the top or bottom edge of the list
+  shows their avatars and the channel's name (or how many channels); clicking it opens the
+  channel. The server icon carries a 🔊 badge while anyone is in a voice channel (private calls
+  are not counted).
+  Files: `public/js/modules/app-bazaar-voice-bubble.js` (new), with hooks in `public/js/app.js`,
+  `public/js/modules/app-channel-unread.js` and `public/locales/en.json`.
+  Test: `test/bazaarVoiceBubble.test.js`.

@@ -5030,5 +5030,9 @@
     "deleted_role": "deleted-role",
     "no_access": "no-access",
     "unknown_channel": "unknown"
+  },
+  "bazaar_voice_bubble": {
+    "title": "In voice",
+    "channels": "{{count}} voice channels"
   }
 }

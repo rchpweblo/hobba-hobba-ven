@@ -705,6 +705,7 @@ _updateChannelVoiceIndicators() {
       }
     }
   });
+  this._bazaarUpdateVoiceBubble?.(); // Bizarre Bazaar fork: the out-of-sight voice bubble
 },
 
 };

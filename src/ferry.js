@@ -2016,6 +2016,79 @@ async function sendReplyToDiscord(link, { username, avatar, content, sender, top
   });
 }
 
+// ── Bizarre Bazaar fork: replies in threads of paired chat channels ──
+// (src/bazaarFerryThreads.js). The Discord thread for a Haven thread is the
+// one on the Discord copy of the message it hangs from: found when it exists,
+// made when it does not, then remembered. A message with no Discord copy
+// (written before the pairing, or not relayed) keeps its thread in Haven.
+
+async function discordThreadFor(link, rootId) {
+  const known = bazaarFerryThreads.threadOfRoot(deps.db, rootId);
+  if (known) return known;
+  const root = deps.db.prepare('SELECT content, discord_message_id FROM messages WHERE id = ? AND channel_id = ? AND thread_id IS NULL')
+    .get(rootId, link.channel_id);
+  if (!root) return null;
+  // A message from Discord carries its id; one written in Haven has its copy's.
+  const copy = SNOWFLAKE.test(String(root.discord_message_id || ''))
+    ? String(root.discord_message_id)
+    : ferryReplies.discordFor(deps.db, rootId, link.discord_channel_id)?.id;
+  if (!SNOWFLAKE.test(String(copy || ''))) return null;
+
+  // A Discord thread started from a message has that message's id, and a
+  // thread copied in without one hangs from a line carrying the thread's id.
+  let threadId = null;
+  try {
+    const ch = await discordRequest('GET', `/channels/${copy}`);
+    if (ch && [10, 11, 12].includes(ch.type) && String(ch.parent_id) === String(link.discord_channel_id)) threadId = String(ch.id);
+  } catch (err) {
+    if (err.status !== 404 && err.discordCode !== 10003) throw err;
+  }
+  if (!threadId) {
+    try {
+      const made = await discordRequest('POST', `/channels/${link.discord_channel_id}/messages/${copy}/threads`,
+        { name: ferryReplies.excerptOf(root.content).slice(0, 100) || 'Thread', auto_archive_duration: 10080 });
+      threadId = made && SNOWFLAKE.test(String(made.id)) ? String(made.id) : null;
+    } catch (err) {
+      // 160004: a thread was made on that message meanwhile; it has its id.
+      if (err.discordCode === 160004) threadId = copy;
+      // 10008: the message is gone from Discord, so there is nothing to hang it on.
+      else if (err.discordCode === 10008) return null;
+      else if (err.status === 403) throw new Error('The bot needs "Create Public Threads" in that Discord channel, so this reply stayed in Haven.');
+      else throw err;
+    }
+  }
+  if (threadId) bazaarFerryThreads.rememberThread(deps.db, rootId, link.channel_id, threadId);
+  return threadId;
+}
+
+async function sendChatThreadReplyToDiscord(link, { username, avatar, content, sender, rootId }) {
+  const guild = guilds.get(String(link.guild_id || ''));
+  const { text, files } = await takeUploads(content, sender);
+  const body = outboundBody(text, guild);
+  if (!body.trim() && !files.length) return;
+  if (isForumType(link.discord_channel_type)) return;
+
+  return enqueue(`ch:${link.discord_channel_id}`, async () => {
+    let threadId;
+    try {
+      threadId = await discordThreadFor(link, rootId);
+      if (!threadId) return;
+      const hook = await ensureLinkWebhook(link);
+      await executeWebhook(hook.id, hook.token, await webhookPayload(link, guild, { username, avatar, body }), { threadId, files });
+      touchLink(link.id, null);
+    } catch (err) {
+      if (threadId && err.discordCode === 10003) {
+        bazaarFerryThreads.forgetThread(deps.db, threadId);
+        throw new Error('That Discord thread was deleted, so this reply stayed in Haven.');
+      }
+      if (err.discordCode === 160005 || err.discordCode === 50083) {
+        throw new Error('That Discord thread is locked, so this reply stayed in Haven.');
+      }
+      throw sendFailure(link, err);
+    }
+  });
+}
+
 /**
  * DMs cannot be impersonated, so the Haven author's name goes in the body. The
  * footer is not decoration: a Discord user who replies to this DM is replying
@@ -2362,6 +2435,7 @@ module.exports = {
   sendToDiscord,
   sendTopicToDiscord,
   sendReplyToDiscord,
+  sendChatThreadReplyToDiscord,
   sendDiscordDm,
   authorizeDmTarget,
   verifyToken,

@@ -1908,6 +1908,7 @@ function setupSocketHandlers(io, db, opts = {}) {
   function ferryRelayReply({ channelId, parentId, user, body, notify }) {
     const cfg = ferry.getConfig();
     if (!cfg.enabled || !cfg.token) return;
+    if (bazaarChatThreadReply({ channelId, parentId, user, body, notify })) return;
     const links = ferryLinksFor(channelId).filter(l => ferry.isForumType(l.discord_channel_type));
     if (!links.length || !String(body || '').trim()) return;
     const ch = db.prepare('SELECT is_forum FROM channels WHERE id = ?').get(channelId);
@@ -1924,6 +1925,30 @@ function setupSocketHandlers(io, db, opts = {}) {
       ferry.sendReplyToDiscord(link, { ...identity, content: body, sender, topicId: parentId })
         .catch(err => notify(`Discord relay failed: ${err.message}`));
     }
+  }
+
+  /**
+   * Bizarre Bazaar fork: a reply in a thread of a paired chat channel goes
+   * into the matching Discord thread, made on the Discord copy of the
+   * message when it does not exist yet (src/bazaarFerryThreads.js). Same rules
+   * as ferryRelayReply. True when the channel is a chat channel, so the forum
+   * path below is left alone.
+   */
+  function bazaarChatThreadReply({ channelId, parentId, user, body, notify }) {
+    const ch = db.prepare('SELECT is_forum FROM channels WHERE id = ?').get(channelId);
+    if (!ch || ch.is_forum) return false;
+    const links = ferryLinksFor(channelId).filter(l => !ferry.isForumType(l.discord_channel_type) && l.out_mode === 'all');
+    if (!links.length || !String(body || '').trim()) return true;
+    if (!user.isAdmin && !userHasPermission(user.id, 'use_ferry', channelId)) return true;
+    const sender = { id: user.id, isAdmin: !!user.isAdmin };
+    body = ownUploadsOnly(body, sender, notify);
+    if (!body.trim()) return true;
+    const identity = { username: user.displayName, avatar: user.avatar || null };
+    for (const link of links) {
+      ferry.sendChatThreadReplyToDiscord(link, { ...identity, content: body, sender, rootId: parentId })
+        .catch(err => notify(`Discord relay failed: ${err.message}`));
+    }
+    return true;
   }
 
   function fireWebhookCallbacks(channelId, channelCode, message) {

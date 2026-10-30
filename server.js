@@ -138,6 +138,7 @@ const { initDatabase } = require('./src/database');
 const { router: authRoutes, authLimiter, verifyToken } = require('./src/auth');
 const { setupSocketHandlers, sanitizeText, sanitizeSoundName, sanitizeBorderTransform, toReplyContext } = require('./src/socketHandlers');
 const { initFerry, stopFerry } = require('./src/ferry');
+const bazaarFerryThreads = require('./src/bazaarFerryThreads');
 const { threadExtras: forumBlogThreadExtras } = require('./src/forumBlog');
 const { canAccessVoiceChannel, getAccessibleVoiceChannels } = require('./src/botVoice');
 const { CREATOR_NOT_BANNED_SQL } = require('./src/botAccess');
@@ -3334,6 +3335,15 @@ initFerry({
       'SELECT id FROM messages WHERE channel_id = ? AND discord_message_id = ? AND thread_id IS NULL'
     ).get(channelId, String(discordThreadId));
     if (found) return found.id;
+    // Bizarre Bazaar fork: a thread made on Discord for a Haven thread, or on
+    // the Discord copy of a message written in Haven (src/bazaarFerryThreads.js).
+    const joined = bazaarFerryThreads.rootOfThread(db, channelId, discordThreadId)
+      || db.prepare(`SELECT m.id FROM ferry_message_map f JOIN messages m ON m.id = f.haven_message_id
+                     WHERE f.discord_message_id = ? AND m.channel_id = ? AND m.thread_id IS NULL`).get(String(discordThreadId), channelId)?.id;
+    if (joined) {
+      bazaarFerryThreads.rememberThread(db, joined, channelId, discordThreadId);
+      return joined;
+    }
     return this.insertHavenMessage({
       channelId, channelCode, username, avatarUrl,
       content: `🧵 ${sanitizeText(String(name || '').slice(0, 100)) || 'Thread'}`,
