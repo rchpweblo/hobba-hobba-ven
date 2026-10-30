@@ -54,6 +54,8 @@ _resetThreadJump() {
 _threadJumpToLatest() {
   const box = document.getElementById('thread-messages');
   if (!box) return;
+  // Bizarre Bazaar fork: from a window of older replies, the newest are fetched.
+  if (this._bazaarThreadNewer && this._bazaarThreadReloadLatest) { this._threadUnseen = 0; return this._bazaarThreadReloadLatest(); }
   box.scrollTop = box.scrollHeight;
   this._threadUnseen = 0;
   this._updateThreadJump();
@@ -65,7 +67,7 @@ _updateThreadJump() {
   const label = document.getElementById('thread-jump-count');
   if (!box || !btn) return;
   const n = this._threadUnseen || 0;
-  const show = n > 0 || this._threadGap(box) > JUMP_SHOW_PX;
+  const show = n > 0 || this._threadGap(box) > JUMP_SHOW_PX || !!this._bazaarThreadNewer; // Bizarre Bazaar fork
   btn.classList.toggle('visible', show);
   btn.classList.toggle('has-count', n > 0);
   const text = n > 0 ? t(n === 1 ? 'thread_runtime.new_replies_one' : 'thread_runtime.new_replies_other', { count: n > 99 ? '99+' : n }) : '';

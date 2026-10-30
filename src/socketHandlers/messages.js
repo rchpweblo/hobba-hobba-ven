@@ -3145,12 +3145,19 @@ module.exports = function register(socket, ctx) {
     // clients, and a blog-mode topic (its post and comments are split from
     // the full list), still get the whole thread.
     const blogParts = forumBlog.blogOn(db, channel.id) ? forumBlog.partIdsOf(db, parentId) : null;
-    const paged = !blogParts && (data.paged === true || isInt(data.before));
+    const paged = !blogParts && (data.paged === true || isInt(data.before) || isInt(data.around) || isInt(data.after));
     const before = paged && isInt(data.before) ? data.before : null;
+    // Bizarre Bazaar fork: `around` (a reply id) asks for the replies either
+    // side of it, for a jump to an old reply without drawing everything in
+    // between, and `after` for the page newer than a reply, to read on down
+    // from there.
+    const inThread = (id) => isInt(id) && !!db.prepare('SELECT 1 FROM messages WHERE id = ? AND thread_id = ?').get(id, parentId);
+    const around = paged && !before && inThread(data.around) ? data.around : null;
+    const after = paged && !before && !around && inThread(data.after) ? data.after : null;
 
     // Opening a thread marks every reply in it seen for this account, and the
     // person's other devices drop the unread dot too (#5641).
-    if (!before) try {
+    if (!before && !around && !after) try {
       db.prepare(`
         INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id)
         VALUES (?, ?, COALESCE((SELECT MAX(id) FROM messages WHERE thread_id = ?), 0))
@@ -3167,7 +3174,28 @@ module.exports = function register(socket, ctx) {
              COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, COALESCE(m.webhook_avatar, u.avatar) as avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile`;
     let messages;
     let hasMore = false;
-    if (!paged) {
+    let hasNewer = false; // Bizarre Bazaar fork
+    const sideOf = (dir, id, limit) => db.prepare(`
+        SELECT ${threadCols}
+        FROM messages m LEFT JOIN users u ON m.user_id = u.id
+        WHERE m.thread_id = ?
+          AND (m.created_at, m.id) ${dir === 'older' ? '<' : '>'} (SELECT created_at, id FROM messages WHERE id = ?)
+        ORDER BY m.created_at ${dir === 'older' ? 'DESC' : 'ASC'}, m.id ${dir === 'older' ? 'DESC' : 'ASC'}
+        LIMIT ?
+      `).all(parentId, id, limit);
+    if (around) {
+      const half = Math.floor(BAZAAR_THREAD_PAGE / 2);
+      const older = sideOf('older', around, half + 1);
+      const newer = sideOf('newer', around, half + 1);
+      const target = db.prepare(`SELECT ${threadCols} FROM messages m LEFT JOIN users u ON m.user_id = u.id WHERE m.id = ?`).all(around);
+      hasMore = older.length > half;
+      hasNewer = newer.length > half;
+      messages = [...older.slice(0, half).reverse(), ...target, ...newer.slice(0, half)];
+    } else if (after) {
+      const newer = sideOf('newer', after, BAZAAR_THREAD_PAGE + 1);
+      hasNewer = newer.length > BAZAAR_THREAD_PAGE;
+      messages = newer.slice(0, BAZAAR_THREAD_PAGE);
+    } else if (!paged) {
       messages = db.prepare(`
         SELECT ${threadCols}
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
@@ -3280,7 +3308,10 @@ module.exports = function register(socket, ctx) {
       messages: enriched,
       // Bizarre Bazaar fork: paging (see above).
       before,
+      around,
+      after,
       hasMore,
+      hasNewer,
       // Bizarre Bazaar fork: how many replies are pinned in this topic.
       pinCount: db.prepare('SELECT COUNT(*) AS cnt FROM pinned_messages pm JOIN messages m ON m.id = pm.message_id WHERE m.thread_id = ?').get(parentId).cnt
     });
@@ -3293,7 +3324,7 @@ module.exports = function register(socket, ctx) {
       WHERE m.id = ? AND m.thread_id IS NULL AND c.is_dm = 0`).get(data.parentId);
     if (!parent || !canTouchChannel(parent.channel_id)) return; // admins too, as get-thread-messages
     const pins = db.prepare(`
-      SELECT m.id, m.content, m.created_at, m.is_webhook, m.webhook_username, m.imported_from,
+      SELECT m.id, m.content, m.created_at, m.is_webhook, m.webhook_username, m.imported_from, m.nsfw,
              COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id,
              pm.pinned_at, COALESCE(pb.display_name, pb.username) as pinned_by
       FROM pinned_messages pm

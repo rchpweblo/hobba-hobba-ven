@@ -999,10 +999,12 @@
    CHAT IMAGES
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
-/* Default: thumbnail mode */
+/* Default: thumbnail mode. Bizarre Bazaar fork: sized as Discord shows a
+   picture, up to 550px wide and 350px tall in its own shape (upstream: a
+   180px square); a click still opens it full size. */
 .chat-image {
-  max-width: 11.25rem;
-  max-height: 11.25rem;
+  max-width: min(100%, 34.375rem);
+  max-height: 21.875rem;
   /* Reserve minimum space before the image loads so the layout doesn't jump
      from 0×0 to full-size. Without this, each image load causes a large
      reflow that the scroll-to-bottom handlers react to individually, making

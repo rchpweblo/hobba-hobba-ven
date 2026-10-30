@@ -70,4 +70,32 @@ test('a long thread comes in pages of 150, oldest page last', async () => {
   const all = await whole;
   assert.equal(all.hasMore, false);
   assert.equal(all.messages[0].content, 'reply 1');
+
+  // A jump to an old reply gets the replies around it, and reads on down from there.
+  const target = all.messages.find((m) => m.content === 'reply 100');
+  const near = h.next(S, 'thread-messages', (d) => d && d.parentId === parentId && d.around === target.id);
+  S.emit('get-thread-messages', { parentId, around: target.id });
+  const win = await near;
+  assert.equal(win.messages.length, 151, '75 either side of it, and it');
+  assert.equal(win.messages[0].content, 'reply 25');
+  assert.equal(win.messages[75].content, 'reply 100');
+  assert.equal(win.messages[150].content, 'reply 175');
+  assert.equal(win.hasMore, true, 'older remain');
+  assert.equal(win.hasNewer, true, 'newer remain');
+
+  const down = h.next(S, 'thread-messages', (d) => d && d.parentId === parentId && d.after === win.messages[150].id);
+  S.emit('get-thread-messages', { parentId, after: win.messages[150].id });
+  const next = await down;
+  assert.equal(next.messages.length, 145);
+  assert.equal(next.messages[0].content, 'reply 176');
+  assert.equal(next.messages[144].content, 'reply 320');
+  assert.equal(next.hasNewer, false, 'that is the newest');
+
+  // Near the start, the window is short on the older side.
+  const early = all.messages.find((m) => m.content === 'reply 3');
+  const start = h.next(S, 'thread-messages', (d) => d && d.parentId === parentId && d.around === early.id);
+  S.emit('get-thread-messages', { parentId, around: early.id });
+  const head = await start;
+  assert.equal(head.messages[0].content, 'reply 1');
+  assert.equal(head.hasMore, false);
 });

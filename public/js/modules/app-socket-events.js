@@ -46,6 +46,7 @@ _listenFeatureEvents() {
     }
     // Bizarre Bazaar fork: an older page goes above what is showing.
     if (data.before) { this._bazaarThreadPrepend?.(data); return; }
+    if (data.after) { this._bazaarThreadAppendNewer?.(data); return; }
     const container = document.getElementById('thread-messages');
     if (!container) return;
     container.innerHTML = '';
@@ -70,6 +71,9 @@ _listenFeatureEvents() {
     if (data.channelCode !== this.currentChannel) return;
     // If this thread is open, append the message
     if (this._activeThreadParent === data.parentId) {
+      // Bizarre Bazaar fork: while older replies are showing (a jump to a
+      // pin), a new one is counted on the jump button, not added below.
+      if (this._bazaarThreadNewer) { this._threadUnseen = (this._threadUnseen || 0) + 1; this._updateThreadJump?.(); return; }
       // E2E: decrypt before render for DM threads
       if (data.message) {
         try { await this._decryptMessages([data.message], data.channelCode); } catch (err) { console.warn('[Thread] could not decrypt the new thread message', err); }

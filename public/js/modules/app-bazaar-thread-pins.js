@@ -5,8 +5,6 @@
 // Server side: bazaarPinReply and bazaar:get-thread-pins in
 // src/socketHandlers/messages.js.
 
-const SEEK_PAGES = 40; // how far back a jump will load (pages of 150)
-
 export default {
 
 _bazaarSetupThreadPins() {
@@ -116,32 +114,42 @@ _bazaarRenderThreadPins(pins) {
   const canPin = this._bazaarCanPinThread();
   list.innerHTML = `<div class="bz-thread-pins-title">${this._escapeHtml(t('bazaar_thread_pins.title'))}</div>` + (pins.length
     ? pins.map(p => {
-      const text = String(p.content || '').replace(/\s+/g, ' ').trim();
-      const snippet = /^\/uploads\//.test(text) ? '🖼️' : text.slice(0, 160) + (text.length > 160 ? '…' : '');
-      return `<div class="bz-thread-pin" data-msg-id="${Number(p.id)}" role="button" tabindex="0">
+      return `<div class="bz-thread-pin${p.nsfw ? ' bz-thread-pin-nsfw' : ''}" data-msg-id="${Number(p.id)}" role="button" tabindex="0">
         <div class="bz-thread-pin-head"><strong>${this._escapeHtml(p.username || '')}</strong>
           <span class="bz-thread-pin-time">${this._escapeHtml(this._fmtDateTime ? this._fmtDateTime(p.created_at) : p.created_at)}</span>
           ${canPin ? `<button type="button" class="bz-thread-unpin" title="${this._escapeHtml(t('msg_toolbar.unpin'))}" aria-label="${this._escapeHtml(t('msg_toolbar.unpin'))}">✕</button>` : ''}</div>
-        <div class="bz-thread-pin-text">${this._escapeHtml(snippet)}</div>
+        <div class="thread-msg-content bz-thread-pin-text">${this._formatContent(String(p.content || ''))}</div>
       </div>`;
     }).join('')
     : `<div class="bz-thread-pins-none">${this._escapeHtml(t('bazaar_thread_pins.none'))}</div>`);
+  // Pictures load straight away (the list is short), and links get their
+  // cards, as in the topic.
+  list.querySelectorAll('img[data-lazy-src]').forEach((img) => { img.loading = 'lazy'; img.src = img.dataset.lazySrc; img.removeAttribute('data-lazy-src'); });
+  try { this._fetchLinkPreviews(list); } catch { /* the plain link stays */ }
   list.querySelectorAll('.bz-thread-pin').forEach((row) => {
     const id = parseInt(row.dataset.msgId, 10);
     row.addEventListener('click', (e) => {
       if (e.target.closest('.bz-thread-unpin')) { e.stopPropagation(); this.socket.emit('unpin-message', { messageId: id }); return; }
+      if (e.target.classList.contains('chat-image') && this._openLightbox) {
+        e.stopPropagation();
+        this._lightboxContainer = list;
+        this._openLightbox(e.target.src, e.target);
+        return;
+      }
+      if (e.target.closest('a, img, video, iframe, .link-preview')) return; // opens the link instead
       this._bazaarJumpToThreadReply(id);
     });
     row.addEventListener('keydown', (e) => { if (e.key === 'Enter') this._bazaarJumpToThreadReply(id); });
   });
 },
 
-// Jumps to a reply in the open topic, loading older pages until it is there.
-_bazaarJumpToThreadReply(id, pagesLeft = SEEK_PAGES) {
+// Jumps to a reply in the open topic. One that is not showing is fetched
+// with the replies around it (app-bazaar-thread-pages.js), and the view lands
+// on it (_threadJumpToMention).
+_bazaarJumpToThreadReply(id) {
   const target = document.querySelector(`#thread-messages [data-msg-id="${id}"]`);
+  this._bazaarCloseThreadPins();
   if (target) {
-    this._bazaarThreadSeek = null;
-    this._bazaarCloseThreadPins();
     this._scrollToMessage(target);
     target.classList.remove('highlight-flash');
     void target.offsetWidth;
@@ -149,18 +157,9 @@ _bazaarJumpToThreadReply(id, pagesLeft = SEEK_PAGES) {
     setTimeout(() => target.classList.remove('highlight-flash'), 2000);
     return;
   }
-  if (!this._bazaarThreadMore || pagesLeft <= 0) {
-    this._bazaarThreadSeek = null;
-    return this._showToast?.(t('bazaar_thread_pins.too_far'), 'info');
-  }
-  this._bazaarThreadSeek = { id, pagesLeft: pagesLeft - 1 };
-  this._bazaarThreadLoadOlder();
-},
-
-// Called after an older page is drawn (app-bazaar-thread-pages.js).
-_bazaarThreadSeekStep() {
-  const seek = this._bazaarThreadSeek;
-  if (seek) this._bazaarJumpToThreadReply(seek.id, seek.pagesLeft);
+  if (!this._activeThreadParent) return;
+  this._threadJumpTarget = id;
+  this.socket.emit('get-thread-messages', { parentId: Number(this._activeThreadParent), around: id });
 },
 
 _bazaarThreadPinsStyle() {
@@ -181,7 +180,12 @@ _bazaarThreadPinsStyle() {
     .bz-thread-pin-time { font-size: 11px; color: var(--text-muted); flex: 1; }
     .bz-thread-unpin { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 12px; padding: 0 2px; }
     .bz-thread-unpin:hover { color: var(--text-primary); }
-    .bz-thread-pin-text { font-size: 13px; color: var(--text-primary); overflow-wrap: anywhere; margin-top: 2px; }
+    .bz-thread-pin-text { font-size: 13px; color: var(--text-primary); overflow-wrap: anywhere; margin-top: 2px;
+      max-height: 220px; overflow: hidden; }
+    .bz-thread-pin-text .chat-image { max-width: min(100%, 200px); max-height: 140px; min-height: 0; }
+    .bz-thread-pin-text .link-preview { max-width: 100%; transform-origin: top left; }
+    .bz-thread-pin-text video, .bz-thread-pin-text iframe { max-width: 100%; max-height: 160px; }
+    .bz-thread-pin-nsfw .bz-thread-pin-text img, .bz-thread-pin-nsfw .bz-thread-pin-text .link-preview { filter: blur(14px); }
   `;
   document.head.appendChild(s);
 },

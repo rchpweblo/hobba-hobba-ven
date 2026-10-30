@@ -11,7 +11,7 @@
 @import url('/css/style-theme-picker.css?v=4.27.12');
 @import url('/css/style-sidebar.css?v=4.25.8');
 @import url('/css/style-messages.css?v=4.27.14');
-@import url('/css/style-profile-servers-modals.css?v=4.23.8');
+@import url('/css/style-profile-servers-modals.css?v=4.23.8-bazaar-1');
 @import url('/css/style-image-zoom.css?v=4.23.12');
 @import url('/css/style-emoji-reactions-threads.css?v=4.25.1');
 @import url('/css/style-thread-unread.css?v=4.26.8');
@@ -26,7 +26,7 @@
 @import url('/css/style-gallery-ferry-forums.css?v=4.27.11');
 @import url('/css/style-move-thread.css?v=4.24.29');
 @import url('/css/style-badges.css?v=4.24.15');
-@import url('/css/style-media-grid.css?v=4.24.34');
+@import url('/css/style-media-grid.css?v=4.24.34-bazaar-1');
 @import url('/css/style-accessibility.css?v=4.22.13');
 
 /* The rules themselves live in the files imported above, in this order. Later

@@ -218,3 +218,20 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   `public/js/modules/app-threads.js`, `public/js/modules/app-message-actions.js`,
   `public/js/modules/app-socket-events.js`, `public/js/modules/app-bazaar-thread-pages.js`,
   `public/js/app.js`, `public/locales/en.json`. Test: `test/bazaarThreadPins.test.js`.
+
+- **Jumping to an old reply no longer lags.** A pin far up a long topic used to load every page
+  between it and the newest, up to 40 in a row. `get-thread-messages` now takes `around` (the 75
+  replies either side of one) and `after` (the next newer page, with `hasNewer`), so a jump draws
+  only the replies around its target; newer ones load from a "Show newer replies" button at the
+  foot or by scrolling down, and "jump to latest" goes back to the newest. While such a window is
+  showing, a new reply is counted on that button rather than added below.
+- **Pinned replies show their pictures.** The topic's pin list draws each pin as the topic does,
+  with pictures and link cards (blurred when the reply is NSFW); a picture opens the viewer.
+- **Thumbnail pictures are sized like Discord's.** In the Thumbnail image mode a picture is at
+  most 550 by 350 pixels, as is a group of them. Full mode is unchanged.
+  Files: `src/socketHandlers/messages.js`, `public/js/modules/app-bazaar-thread-pages.js`,
+  `public/js/modules/app-bazaar-thread-pins.js`, `public/js/modules/app-socket-events.js`,
+  `public/js/modules/app-thread-scroll.js`, `public/js/app.js`, `public/app.html`,
+  `public/css/style.css`, `public/css/style-media-grid.css`,
+  `public/css/style-profile-servers-modals.css`, `public/locales/en.json`.
+  Test: `test/bazaarThreadPages.test.js`.
