@@ -6,14 +6,14 @@
 
 import SocketMethods   from './modules/app-socket.js?v=4.26.5';
 import SocketChannelMethods from './modules/app-socket-channels.js?v=4.26.11';
-import SocketEventMethods from './modules/app-socket-events.js?v=4.26.14-bazaar-2';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.26.14-bazaar-3';
 import UIBindMethods   from './modules/app-ui.js?v=4.27.21';
 import ComposerMethods from './modules/app-composer.js?v=4.25.26';
 import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
 import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.26.5';
 import VoiceControlMethods from './modules/app-voice-controls.js?v=4.27.22';
 import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.26.8';
-import MessageActionMethods from './modules/app-message-actions.js?v=4.26.9';
+import MessageActionMethods from './modules/app-message-actions.js?v=4.26.9-bazaar-1';
 import PipPanelMethods from './modules/app-pip-panels.js?v=4.26.13';
 import PeopleMethods from './modules/app-people.js?v=4.25.28';
 import SettingsMethods from './modules/app-settings.js?v=4.23.9';
@@ -56,7 +56,7 @@ import UtilityMethods  from './modules/app-utilities.js?v=4.27.14';
 import MessageContentMethods from './modules/app-message-content.js?v=4.27.18-bazaar-1';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.25.2';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.25.6';
-import ThreadMethods from './modules/app-threads.js?v=4.27.20-bazaar-1';
+import ThreadMethods from './modules/app-threads.js?v=4.27.20-bazaar-2';
 import AdminMethods    from './modules/app-admin.js?v=4.27.4';
 import BrandingMethods from './modules/app-branding.js?v=4.21.0';
 import MembersAdminMethods from './modules/app-members-admin.js?v=4.27.3';
@@ -71,7 +71,8 @@ import BazaarRoleBotMethods from './modules/app-bazaar-role-bot.js?v=bazaar-2'; 
 import BazaarEventMethods from './modules/app-bazaar-events.js?v=bazaar-1'; // Bizarre Bazaar fork
 import BazaarDiscordRefMethods from './modules/app-bazaar-discord-refs.js?v=bazaar-1'; // Bizarre Bazaar fork
 import BazaarVoiceBubbleMethods from './modules/app-bazaar-voice-bubble.js?v=bazaar-3'; // Bizarre Bazaar fork
-import BazaarThreadPageMethods from './modules/app-bazaar-thread-pages.js?v=bazaar-1'; // Bizarre Bazaar fork
+import BazaarThreadPageMethods from './modules/app-bazaar-thread-pages.js?v=bazaar-2'; // Bizarre Bazaar fork
+import BazaarThreadPinMethods from './modules/app-bazaar-thread-pins.js?v=bazaar-1'; // Bizarre Bazaar fork
 import SearchMethods   from './modules/app-search.js?v=4.24.32';
 import FerryMethods    from './modules/app-ferry.js?v=4.24.10';
 import ForumMethods    from './modules/app-forum.js?v=4.27.13';
@@ -465,6 +466,7 @@ class HavenApp {
     this._initWelcomePopups();
     this._bazaarSetupEvents(); // Bizarre Bazaar fork
     this._bazaarSetupVoiceBubble(); // Bizarre Bazaar fork
+    this._bazaarSetupThreadPins(); // Bizarre Bazaar fork
     this._initMoveMessages();
     this._initMoveToThread();
 
@@ -623,6 +625,7 @@ Object.assign(HavenApp.prototype,
   BazaarDiscordRefMethods,
   BazaarVoiceBubbleMethods,
   BazaarThreadPageMethods,
+  BazaarThreadPinMethods,
   SearchMethods,
   FerryMethods,
   ForumMethods,

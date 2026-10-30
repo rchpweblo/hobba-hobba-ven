@@ -5038,5 +5038,10 @@
   "bazaar_thread_pages": {
     "older": "Show older replies",
     "loading": "Loading older replies…"
+  },
+  "bazaar_thread_pins": {
+    "title": "Pinned in this topic",
+    "none": "Nothing is pinned in this topic yet.",
+    "too_far": "That reply is too far back to load from here. Scroll up to find it."
   }
 }

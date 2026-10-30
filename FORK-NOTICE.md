@@ -205,3 +205,16 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   importer keeps a message that is only a sticker, which upstream left out.
   Files: `src/bazaarStickers.js` (new, with table `bazaar_discord_stickers`), `src/ferry.js`,
   `src/database.js`, `src/routes/import.js`. Test: `test/bazaarFerrySync.test.js`.
+  A guild sticker whose picture is already in Haven's library (a server template brings them
+  along) is not added to the picker a second time.
+- **Pins inside a forum topic or thread.** A reply can be pinned from its toolbar, by anyone who
+  may pin, and the thread panel's 📌 button lists what is pinned in that topic only, up to 250 a
+  topic (Discord's limit for a thread); choosing one jumps to it, loading older replies as needed. Upstream had no pin for a
+  reply at all. The channel's own pins, and a forum's pinned topics, are the messages with no
+  `thread_id`, so the channel's pin list and count leave reply pins out. A reply pin finds its
+  channel from the message, not from the channel last opened, and is announced as
+  `bazaar:thread-pin` so the channel's pin badge is left alone.
+  Files: `src/socketHandlers/messages.js`, `public/js/modules/app-bazaar-thread-pins.js` (new),
+  `public/js/modules/app-threads.js`, `public/js/modules/app-message-actions.js`,
+  `public/js/modules/app-socket-events.js`, `public/js/modules/app-bazaar-thread-pages.js`,
+  `public/js/app.js`, `public/locales/en.json`. Test: `test/bazaarThreadPins.test.js`.

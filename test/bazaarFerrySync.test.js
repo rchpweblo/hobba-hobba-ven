@@ -286,6 +286,12 @@ test('edits and deletes cross both ways', async (t) => {
     assert.ok(await library, 'open pickers are told');
     assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM stickers WHERE pack_name = 'Discord'").get().n, 1, 'a Lottie sticker is left out');
 
+    // A sticker whose picture is already in the library is not added again
+    // (the stand-in Discord draws every sticker the same).
+    update([{ id: PIG, name: 'Big Pig', format_type: 1 }, { id: '1400000000000000005', name: 'Same Pig', format_type: 1 }]);
+    assert.ok(await until(() => db.prepare("SELECT 1 FROM bazaar_discord_stickers WHERE discord_id = '1400000000000000005' AND in_picker = 1").get(), 10000), 'seen');
+    assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM stickers WHERE pack_name = 'Discord'").get().n, 1, 'not a second copy in the picker');
+
     // Removed in Haven, it stays removed.
     db.prepare("DELETE FROM stickers WHERE pack_name = 'Discord'").run();
     update([{ id: PIG, name: 'Big Pig', format_type: 1 }]);

@@ -114,12 +114,33 @@ async function syncGuild(db, stickers, opts = {}) {
     if (before && before.in_picker) continue;
     const line = await copy(db, { id: s.id, name: s.name, format: s.format_type }, opts);
     if (!line) continue;
-    db.prepare('INSERT INTO stickers (name, pack_name, filename, uploaded_by) VALUES (?, ?, ?, NULL)')
-      .run(pickerName(db, s.name), 'Discord', path.basename(line));
+    // One already in the library (a server template brings the guild's
+    // stickers along) is not added a second time.
+    if (!(await alreadyInLibrary(db, path.basename(line)))) {
+      db.prepare('INSERT INTO stickers (name, pack_name, filename, uploaded_by) VALUES (?, ?, ?, NULL)')
+        .run(pickerName(db, s.name), 'Discord', path.basename(line));
+      added++;
+    }
     db.prepare('UPDATE bazaar_discord_stickers SET in_picker = 1 WHERE discord_id = ?').run(String(s.id));
-    added++;
   }
   return added;
+}
+
+// Whether a sticker with the same picture is already in the picker.
+async function alreadyInLibrary(db, filename) {
+  const storage = require('./storage');
+  const size = db.prepare('SELECT bytes FROM media_objects WHERE rel_path = ?').get(`stickers/${filename}`)?.bytes;
+  if (!size) return false;
+  const same = db.prepare(`SELECT s.filename FROM stickers s JOIN media_objects m ON m.rel_path = 'stickers/' || s.filename
+    WHERE m.bytes = ? AND s.filename != ?`).all(size, filename);
+  if (!same.length) return false;
+  const mine = await storage.readBuffer(`stickers/${filename}`).catch(() => null);
+  if (!mine) return false;
+  for (const { filename: other } of same) {
+    const theirs = await storage.readBuffer(`stickers/${other}`).catch(() => null);
+    if (theirs && mine.equals(theirs)) return true;
+  }
+  return false;
 }
 
 // A sticker link in message text ("Copy link" on a sticker gives one).

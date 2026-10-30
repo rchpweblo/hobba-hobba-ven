@@ -60,6 +60,7 @@ _bazaarThreadPrepend(data) {
   for (const el of shown) box.appendChild(el);
   this._bazaarThreadPaged(data);
   box.scrollTop = box.scrollHeight - fromBottom;
+  this._bazaarThreadSeekStep?.(); // a jump to a pinned reply (app-bazaar-thread-pins.js)
 },
 
 };

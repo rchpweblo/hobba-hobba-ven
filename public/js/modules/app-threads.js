@@ -448,6 +448,7 @@ _appendThreadMessage(msg, opts = {}) {
       ? `<button data-thread-action="unnsfw" title="${t('msg_toolbar.unmark_nsfw')}">${iNsfw}</button>`
       : `<button data-thread-action="nsfw" title="${t('msg_toolbar.mark_nsfw')}">${iNsfw}</button>`;
   }
+  threadOverflowToolbarBtns += this._bazaarThreadPinBtn?.(msg, iconPair) || ''; // Bizarre Bazaar fork
   if (canEdit) threadOverflowToolbarBtns += `<button data-thread-action="edit" title="${t('msg_toolbar.edit')}">${iEdit}</button>`;
   if (canDelete) threadOverflowToolbarBtns += `<button data-thread-action="delete" title="${t('msg_toolbar.delete')}">${iDelete}</button>`;
   const threadOverflowHtml = threadOverflowToolbarBtns
@@ -527,6 +528,7 @@ _appendThreadMessage(msg, opts = {}) {
     `;
   }
   if (msg.nsfw) this._applyMessageNsfw?.(el, true);
+  if (msg.pinned) this._bazaarMarkThreadPin?.(el, true); // Bizarre Bazaar fork
   target.appendChild(el);
   if (target !== container) this._forumBlogRecount?.();
   // Link cards in threads, the same as in the channel (#5620).

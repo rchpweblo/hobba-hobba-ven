@@ -583,7 +583,8 @@ module.exports = function register(socket, ctx) {
       channelCode: code,
       messages: (after || around) ? enriched : enriched.reverse(),
       lastReadMessageId,
-      pinnedCount: db.prepare('SELECT COUNT(*) as cnt FROM pinned_messages WHERE channel_id = ? AND message_id > ?').get(channel.id, floor).cnt,
+      // Bizarre Bazaar fork: the channel's own pins, not those inside its topics.
+      pinnedCount: db.prepare('SELECT COUNT(*) as cnt FROM pinned_messages pm JOIN messages m ON m.id = pm.message_id WHERE pm.channel_id = ? AND pm.message_id > ? AND m.thread_id IS NULL').get(channel.id, floor).cnt,
       ...(around ? { around } : {})
     });
   });
@@ -2419,9 +2420,59 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Pin / Unpin message ─────────────────────────────────
+  // ── Bizarre Bazaar fork: pins inside a topic or thread ────
+  // A reply is pinned in its topic's own list, not the channel's: the
+  // channel's pins (and a forum's pinned topics) are messages with no
+  // thread_id. The channel is found from the message, as get-thread-messages
+  // does, so a topic opened from search or a pop-out still works, and each
+  // topic holds up to 250 pins of its own (Discord's limit for a thread).
+  // Open screens hear of it as
+  // `bazaar:thread-pin`, which leaves the channel's pin badge alone.
+  const BAZAAR_TOPIC_PIN_LIMIT = 250;
+  function bazaarReplyOf(messageId) {
+    return db.prepare(`SELECT m.id, m.thread_id, m.destruct_at, m.channel_id, c.code
+      FROM messages m JOIN channels c ON c.id = m.channel_id
+      WHERE m.id = ? AND m.thread_id IS NOT NULL AND c.is_dm = 0`).get(messageId) || null;
+  }
+  function bazaarPinReply(msg, pin) {
+    if (!socket.user.isAdmin && !userHasPermission(socket.user.id, 'pin_message', msg.channel_id)) {
+      return socket.emit('error-msg', pin ? 'You don\'t have permission to pin messages' : 'You don\'t have permission to unpin messages');
+    }
+    if (!canTouchChannel(msg.channel_id)) return;
+    const pinned = db.prepare('SELECT 1 FROM pinned_messages WHERE message_id = ?').get(msg.id);
+    try {
+      if (pin) {
+        if (pinned) return socket.emit('error-msg', 'Message is already pinned');
+        const count = db.prepare(`SELECT COUNT(*) AS cnt FROM pinned_messages pm JOIN messages m ON m.id = pm.message_id
+          WHERE m.thread_id = ?`).get(msg.thread_id).cnt;
+        if (count >= BAZAAR_TOPIC_PIN_LIMIT) return socket.emit('error-msg', `This topic has reached the ${BAZAAR_TOPIC_PIN_LIMIT}-pin limit`);
+        db.prepare('INSERT INTO pinned_messages (message_id, channel_id, pinned_by) VALUES (?, ?, ?)').run(msg.id, msg.channel_id, socket.user.id);
+        auditMessage('message_pin', msg.id, msg.channel_id);
+        if (msg.destruct_at) {
+          db.prepare('UPDATE messages SET destruct_at = NULL WHERE id = ?').run(msg.id);
+          selfDestruct.forget(msg.destruct_at);
+        }
+      } else {
+        if (!pinned) return socket.emit('error-msg', 'Message is not pinned');
+        db.prepare('DELETE FROM pinned_messages WHERE message_id = ?').run(msg.id);
+        auditMessage('message_unpin', msg.id, msg.channel_id);
+      }
+    } catch (err) {
+      console.error('Topic pin error:', err);
+      return socket.emit('error-msg', pin ? 'Failed to pin message' : 'Failed to unpin message');
+    }
+    io.to(`channel:${msg.code}`).emit('bazaar:thread-pin', {
+      channelCode: msg.code, threadId: msg.thread_id, messageId: msg.id, pinned: pin,
+      pinnedBy: pin ? socket.user.displayName : undefined,
+      count: db.prepare('SELECT COUNT(*) AS cnt FROM pinned_messages pm JOIN messages m ON m.id = pm.message_id WHERE m.thread_id = ?').get(msg.thread_id).cnt,
+    });
+  }
+
   socket.on('pin-message', (data) => {
     if (!data || typeof data !== 'object') return;
     if (!isInt(data.messageId)) return;
+    const bzReply = bazaarReplyOf(data.messageId); // Bizarre Bazaar fork
+    if (bzReply) return bazaarPinReply(bzReply, true);
 
     const pinCode = socket.currentChannel;
     const pinCh = pinCode ? db.prepare('SELECT id FROM channels WHERE code = ?').get(pinCode) : null;
@@ -2481,6 +2532,8 @@ module.exports = function register(socket, ctx) {
   socket.on('unpin-message', (data) => {
     if (!data || typeof data !== 'object') return;
     if (!isInt(data.messageId)) return;
+    const bzReply = bazaarReplyOf(data.messageId); // Bizarre Bazaar fork
+    if (bzReply) return bazaarPinReply(bzReply, false);
 
     const unpinCode = socket.currentChannel;
     const unpinCh = unpinCode ? db.prepare('SELECT id FROM channels WHERE code = ?').get(unpinCode) : null;
@@ -2616,6 +2669,7 @@ module.exports = function register(socket, ctx) {
       LEFT JOIN users u ON m.user_id = u.id
       LEFT JOIN users pb ON pm.pinned_by = pb.id
       WHERE pm.channel_id = ? AND m.id > ?
+        AND m.thread_id IS NULL -- Bizarre Bazaar fork: a topic's pins are its own
       ORDER BY pm.pinned_at DESC
     `).all(channel.id, groupHistoryFloor(db, channel, socket.user.id));
 
@@ -3173,8 +3227,11 @@ module.exports = function register(socket, ctx) {
       });
     }
 
+    // Bizarre Bazaar fork: which replies are pinned in this topic.
+    const bzPinned = new Set(msgIds.length ? db.prepare(`SELECT message_id FROM pinned_messages WHERE message_id IN (${msgIds.map(() => '?').join(',')})`).all(...msgIds).map(r => r.message_id) : []);
     const enriched = messages.map(m => {
       const obj = { ...m };
+      if (bzPinned.has(m.id)) obj.pinned = true;
       if (m.silent) obj.silent = true; else delete obj.silent;
       if (m.nsfw) obj.nsfw = true; else delete obj.nsfw;
       const atags = threadTagMap.get(m.id);
@@ -3223,8 +3280,35 @@ module.exports = function register(socket, ctx) {
       messages: enriched,
       // Bizarre Bazaar fork: paging (see above).
       before,
-      hasMore
+      hasMore,
+      // Bizarre Bazaar fork: how many replies are pinned in this topic.
+      pinCount: db.prepare('SELECT COUNT(*) AS cnt FROM pinned_messages pm JOIN messages m ON m.id = pm.message_id WHERE m.thread_id = ?').get(parentId).cnt
     });
+  });
+
+  // ── Bizarre Bazaar fork: a topic's pinned replies ────────
+  socket.on('bazaar:get-thread-pins', (data) => {
+    if (!data || typeof data !== 'object' || !isInt(data.parentId)) return;
+    const parent = db.prepare(`SELECT m.id, m.channel_id, c.code FROM messages m JOIN channels c ON c.id = m.channel_id
+      WHERE m.id = ? AND m.thread_id IS NULL AND c.is_dm = 0`).get(data.parentId);
+    if (!parent || !canTouchChannel(parent.channel_id)) return; // admins too, as get-thread-messages
+    const pins = db.prepare(`
+      SELECT m.id, m.content, m.created_at, m.is_webhook, m.webhook_username, m.imported_from,
+             COALESCE(m.persona_username, m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id,
+             pm.pinned_at, COALESCE(pb.display_name, pb.username) as pinned_by
+      FROM pinned_messages pm
+      JOIN messages m ON m.id = pm.message_id
+      LEFT JOIN users u ON m.user_id = u.id
+      LEFT JOIN users pb ON pm.pinned_by = pb.id
+      WHERE m.thread_id = ?
+      ORDER BY pm.pinned_at DESC, pm.id DESC
+    `).all(parent.id);
+    for (const p of pins) {
+      p.created_at = utcStamp(p.created_at);
+      p.pinned_at = utcStamp(p.pinned_at);
+      if (p.is_webhook && !p.imported_from) p.username = `[BOT] ${p.webhook_username || 'Bot'}`;
+    }
+    socket.emit('bazaar:thread-pins', { parentId: parent.id, channelCode: parent.code, pins });
   });
 
   // ── Send message to thread ──────────────────────────────
