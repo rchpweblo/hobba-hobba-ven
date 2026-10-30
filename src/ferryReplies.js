@@ -13,10 +13,7 @@
 // message it answers, with a jump link. A webhook cannot make a true Discord
 // reply, so that line is the closest thing.
 
-const KEEP_DAYS = 90;
 const SNOWFLAKE = /^\d{5,25}$/;
-
-let pruneCountdown = 0;
 
 function ensureSchema(db) {
   db.exec(`
@@ -39,12 +36,10 @@ function recordPair(db, { havenMessageId, discordMessageId, discordChannelId, di
   const author = SNOWFLAKE.test(String(discordAuthorId || '')) ? String(discordAuthorId) : null;
   db.prepare(`INSERT OR IGNORE INTO ferry_message_map (haven_message_id, discord_message_id, discord_channel_id, discord_author_id)
     VALUES (?, ?, ?, ?)`).run(Number(havenMessageId), String(discordMessageId), String(discordChannelId), author);
-  // Old pairs are only needed for replies to old messages; a few hundred
-  // inserts between sweeps keeps the table from growing without end.
-  if (--pruneCountdown <= 0) {
-    pruneCountdown = 500;
-    db.prepare(`DELETE FROM ferry_message_map WHERE created_at < datetime('now', ?)`).run(`-${KEEP_DAYS} days`);
-  }
+  // Bizarre Bazaar fork: pairs are kept for good, where upstream pruned them
+  // after 90 days, because an edit or delete of an older message needs its
+  // pair to reach the other side. A pair goes once its delete has crossed
+  // (src/bazaarFerrySync.js).
 }
 
 // The Haven message, in this Haven channel, that a Discord message is.

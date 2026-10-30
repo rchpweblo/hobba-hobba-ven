@@ -3415,6 +3415,8 @@ module.exports = function register(socket, ctx) {
         user: socket.user,
         body: safeContent,
         notify: (msg) => socket.emit('error-msg', msg),
+        // Bizarre Bazaar fork: kept with its Discord copy, for edits and deletes.
+        havenMessageId: Number(message.id),
       });
 
       if (typeof callback === 'function') callback({ success: true });

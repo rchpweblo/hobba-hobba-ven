@@ -19,6 +19,7 @@ const { migrateBazaarRoleBot } = require('./bazaarRoleBot');
 const { migrateBazaarEvents } = require('./bazaarEvents');
 const { migrateBazaarDiscordRefs } = require('./bazaarDiscordRefs');
 const { migrateBazaarFerryThreads } = require('./bazaarFerryThreads');
+const { migrateBazaarFerrySync } = require('./bazaarFerrySync');
 const { migrateMessageNsfw } = require('./messageNsfw');
 const { convertPermissionThresholds } = require('./permissionThresholds');
 const { migrateBadges } = require('./badges');
@@ -1314,6 +1315,9 @@ function initDatabase() {
       ON messages(channel_id, discord_message_id)
       WHERE discord_message_id IS NOT NULL;
   `);
+  // Bizarre Bazaar fork: edits and deletes cross Ferry both ways
+  // (src/bazaarFerrySync.js); needs discord_message_id and ferry_message_map.
+  migrateBazaarFerrySync(db);
 
   // ── Migration: discord_channel_id on channels (import deduplication) ─────
   // Stores the originating Discord channel snowflake so a second import of the

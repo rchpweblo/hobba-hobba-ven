@@ -159,3 +159,27 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   `src/socketHandlers/messages.js`, `public/js/app.js`, `public/js/modules/app-socket-events.js`,
   `public/js/modules/app-threads.js`, `public/js/modules/app-move-to-thread.js` and
   `public/locales/en.json`. Test: `test/bazaarThreadPages.test.js`.
+
+**2026-10-30, based on Haven v4.27.0**
+
+- **Edits and deletes cross Ferry both ways.** A message deleted on either side is deleted on
+  the other, whatever deleted it (a person, a moderator, a bulk delete, a self-destruct timer, a
+  deleted account), and an edit follows its message. Upstream Ferry applied only Discord edits,
+  and only to the last 500 messages relayed since the server started. Copied history counts too:
+  each imported message keeps its Discord id. Exceptions: deleting a whole channel or its pairing
+  deletes nothing on Discord; a protected Haven message stays; and a Discord delete of a message
+  that has Haven thread replies marks it "[deleted on Discord]" instead of deleting it, because
+  Discord keeps a thread's replies when its first message goes. A Discord edit to copied history
+  replaces the words and keeps the pictures stored in Haven.
+  Haven's deletes and edits are caught by triggers on `messages` into `bazaar_ferry_outbox`, and
+  Ferry sends them while the setting `bazaar_ferry_sync_out` is `on`; more than 200 in a minute
+  sets it to `paused` and sends nothing until it is turned back on. A thread's first message
+  deleted in Haven deletes its whole Discord thread when the bot has Manage Threads. The bot needs
+  Manage Messages to delete messages other people wrote. Pairs of Haven and Discord messages
+  (`ferry_message_map`) are now kept for good instead of 90 days, and forum topics, forum replies
+  and thread replies sent to Discord now record theirs.
+  Files: `src/bazaarFerrySync.js` (new), with hooks in `src/ferry.js`, `src/ferryReplies.js`,
+  `src/database.js`, `src/socketHandlers/index.js` and `src/socketHandlers/messages.js`.
+  Test: `test/bazaarFerrySync.test.js`, with delete and edit routes added to `test/fakeDiscord.js`.
+- **The voice bubble is half again as big**, and follows the reduced-motion setting when it
+  scrolls to a channel. File: `public/js/modules/app-bazaar-voice-bubble.js`.

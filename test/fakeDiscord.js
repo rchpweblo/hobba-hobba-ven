@@ -36,6 +36,14 @@ function startFakeDiscord(port) {
   const botMessages = [];
   const threads = new Map();       // id -> thread, as GET /channels/:id answers
   const threadsMade = [];          // threads made on a message through the API
+  // Bizarre Bazaar fork: messages that exist (id -> channel id), so a delete
+  // in the wrong channel fails as it does on Discord; and what was deleted
+  // or edited (src/bazaarFerrySync.js).
+  const messages = new Map();
+  const deletions = [];            // { channelId, messageId, status }
+  const threadDeletions = [];      // thread ids deleted
+  const edits = [];                // { webhookId, messageId, threadId, body }
+  const perms = { manageThreads: false };
   let seq = 0;
   let identified = 0;
 
@@ -141,6 +149,28 @@ function startFakeDiscord(port) {
         const thread = threads.get(parts[1]);
         return thread ? json(res, 200, thread) : json(res, 404, { message: 'Unknown Channel', code: 10003 });
       }
+      if (req.method === 'DELETE' && parts[0] === 'channels' && parts.length === 2) {
+        if (!threads.has(parts[1])) return json(res, 404, { message: 'Unknown Channel', code: 10003 });
+        if (!perms.manageThreads) return json(res, 403, { message: 'Missing Permissions', code: 50013 });
+        threads.delete(parts[1]);
+        threadDeletions.push(parts[1]);
+        for (const [id, ch] of messages) if (ch === parts[1]) messages.delete(id);
+        return json(res, 200, { id: parts[1] });
+      }
+      if (req.method === 'DELETE' && parts[0] === 'channels' && parts[2] === 'messages' && parts.length === 4) {
+        const found = messages.get(parts[3]) === parts[1];
+        deletions.push({ channelId: parts[1], messageId: parts[3], status: found ? 204 : 404 });
+        if (!found) return json(res, 404, { message: 'Unknown Message', code: 10008 });
+        messages.delete(parts[3]);
+        res.writeHead(204); return res.end();
+      }
+      if (req.method === 'PATCH' && parts[0] === 'webhooks' && parts[3] === 'messages' && parts.length === 5) {
+        const hook = webhooks.get(parts[1]);
+        if (!hook || hook.token !== parts[2]) return json(res, 404, { message: 'Unknown Webhook', code: 10015 });
+        if (!messages.has(parts[4])) return json(res, 404, { message: 'Unknown Message', code: 10008 });
+        edits.push({ webhookId: hook.id, messageId: parts[4], threadId: url.searchParams.get('thread_id'), body });
+        return json(res, 200, { id: parts[4], content: body && body.content });
+      }
       if (req.method === 'POST' && url.pathname === '/users/@me/channels') return json(res, 200, { id: newId(), type: 1, recipient_id: body && body.recipient_id });
       if (req.method === 'GET' && parts[0] === 'guilds' && parts[2] === 'members' && parts.length === 4) return json(res, 200, { user: { id: parts[3], username: 'member', bot: false } });
       if (req.method === 'POST' && parts[0] === 'channels' && parts[2] === 'messages') {
@@ -161,6 +191,7 @@ function startFakeDiscord(port) {
         const channelId = threadId || (body && body.thread_name ? id : hook.channelId);
         const result = { id, channel_id: channelId, webhook_id: hook.id, content: body && body.content };
         executions.push({ webhookId: hook.id, threadId, body, result });
+        messages.set(id, channelId);
         return json(res, 200, result);
       }
       json(res, 404, { message: 'Not handled by the fake Discord', code: 0 });
@@ -200,6 +231,11 @@ function startFakeDiscord(port) {
       webhooks,
       threads,
       threadsMade,
+      messages,
+      deletions,
+      threadDeletions,
+      edits,
+      perms,
       newId,
       get identified() { return identified; },
       get connections() { return sockets.size; },

@@ -1905,10 +1905,10 @@ function setupSocketHandlers(io, db, opts = {}) {
    * sender holds use_ferry, and only the channel's own pairings. A topic with
    * no Discord post keeps its replies in Haven (see sendReplyToDiscord).
    */
-  function ferryRelayReply({ channelId, parentId, user, body, notify }) {
+  function ferryRelayReply({ channelId, parentId, user, body, notify, havenMessageId = null }) {
     const cfg = ferry.getConfig();
     if (!cfg.enabled || !cfg.token) return;
-    if (bazaarChatThreadReply({ channelId, parentId, user, body, notify })) return;
+    if (bazaarChatThreadReply({ channelId, parentId, user, body, notify, havenMessageId })) return;
     const links = ferryLinksFor(channelId).filter(l => ferry.isForumType(l.discord_channel_type));
     if (!links.length || !String(body || '').trim()) return;
     const ch = db.prepare('SELECT is_forum FROM channels WHERE id = ?').get(channelId);
@@ -1922,7 +1922,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     // Thread replies have no persona prefix, so the real name always goes.
     const identity = { username: user.displayName, avatar: user.avatar || null };
     for (const link of links) {
-      ferry.sendReplyToDiscord(link, { ...identity, content: body, sender, topicId: parentId })
+      ferry.sendReplyToDiscord(link, { ...identity, content: body, sender, topicId: parentId, havenMessageId })
         .catch(err => notify(`Discord relay failed: ${err.message}`));
     }
   }
@@ -1934,7 +1934,7 @@ function setupSocketHandlers(io, db, opts = {}) {
    * as ferryRelayReply. True when the channel is a chat channel, so the forum
    * path below is left alone.
    */
-  function bazaarChatThreadReply({ channelId, parentId, user, body, notify }) {
+  function bazaarChatThreadReply({ channelId, parentId, user, body, notify, havenMessageId = null }) {
     const ch = db.prepare('SELECT is_forum FROM channels WHERE id = ?').get(channelId);
     if (!ch || ch.is_forum) return false;
     const links = ferryLinksFor(channelId).filter(l => !ferry.isForumType(l.discord_channel_type) && l.out_mode === 'all');
@@ -1945,7 +1945,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     if (!body.trim()) return true;
     const identity = { username: user.displayName, avatar: user.avatar || null };
     for (const link of links) {
-      ferry.sendChatThreadReplyToDiscord(link, { ...identity, content: body, sender, rootId: parentId })
+      ferry.sendChatThreadReplyToDiscord(link, { ...identity, content: body, sender, rootId: parentId, havenMessageId })
         .catch(err => notify(`Discord relay failed: ${err.message}`));
     }
     return true;

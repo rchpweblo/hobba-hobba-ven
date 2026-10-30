@@ -44,6 +44,7 @@ const { accessContext, channelAccess, bits } = require('./discordPermissions');
 const { unescapeDiscord, forwardedMessage, quoteForwarded } = require('./discordText');
 const ferryReplies = require('./ferryReplies');
 const bazaarFerryThreads = require('./bazaarFerryThreads');
+const bazaarFerrySync = require('./bazaarFerrySync');
 
 /**
  * The tests run Ferry against a stand-in Discord on this machine, set through
@@ -586,6 +587,16 @@ function handleDispatch(type, d) {
       relayEditToHaven(d);
       break;
 
+    // Bizarre Bazaar fork: a message deleted on Discord goes in Haven too
+    // (src/bazaarFerrySync.js).
+    case 'MESSAGE_DELETE':
+      bazaarDeleteFromDiscord([d && d.id]);
+      break;
+
+    case 'MESSAGE_DELETE_BULK':
+      bazaarDeleteFromDiscord((d && d.ids) || []);
+      break;
+
     case 'THREAD_CREATE':
       cacheThread(d);
       takePendingStarter(d && d.id);
@@ -853,7 +864,9 @@ function relayEditToHaven(msg) {
     if (typeof msg.content !== 'string') return;
 
     const known = relayedMessages.get(msg.id);
-    if (!known) return;
+    // Bizarre Bazaar fork: one relayed before a restart, or copied by the
+    // importer, is found in the database instead.
+    if (!known) return bazaarEditFromDiscord(msg);
 
     const content = buildHavenContent(msg);
     if (!content || content === known.content) return;
@@ -1963,6 +1976,9 @@ async function sendTopicToDiscord(link, { username, avatar, content, sender, tit
             (topic_message_id, channel_id, guild_id, discord_forum_id, discord_thread_id, origin)
           VALUES (?, ?, ?, ?, ?, 'haven')
         `).run(topicId, link.channel_id, String(link.guild_id), String(link.discord_channel_id), threadId);
+        // Bizarre Bazaar fork: a post's first message has the post's id, so
+        // an edit or delete of the topic can reach it (src/bazaarFerrySync.js).
+        ferryReplies.recordPair(deps.db, { havenMessageId: topicId, discordMessageId: threadId, discordChannelId: threadId });
       }
       touchLink(link.id, null);
     } catch (err) {
@@ -1978,7 +1994,8 @@ async function sendTopicToDiscord(link, { username, avatar, content, sender, tit
  * replies in Haven. The lookup runs inside the queue, so a reply sent right
  * after its topic waits for the topic's post to exist.
  */
-async function sendReplyToDiscord(link, { username, avatar, content, sender, topicId }) {
+// Bizarre Bazaar fork: `havenMessageId` keeps the pair, for edits and deletes.
+async function sendReplyToDiscord(link, { username, avatar, content, sender, topicId, havenMessageId = null }) {
   const guild = guilds.get(String(link.guild_id || ''));
   const { text, files } = await takeUploads(content, sender);
   const body = outboundBody(text, guild);
@@ -1997,9 +2014,12 @@ async function sendReplyToDiscord(link, { username, avatar, content, sender, top
     }
     try {
       const hook = await ensureLinkWebhook(link);
-      await executeWebhook(hook.id, hook.token,
+      const sent = await executeWebhook(hook.id, hook.token,
         await webhookPayload(link, guild, { username, avatar, body }),
         { threadId: row.discord_thread_id, files });
+      if (havenMessageId && sent && sent.id) {
+        ferryReplies.recordPair(deps.db, { havenMessageId, discordMessageId: sent.id, discordChannelId: row.discord_thread_id });
+      }
       touchLink(link.id, null);
     } catch (err) {
       // 10003 is "unknown channel": the post is gone, so forget it.
@@ -2061,7 +2081,7 @@ async function discordThreadFor(link, rootId) {
   return threadId;
 }
 
-async function sendChatThreadReplyToDiscord(link, { username, avatar, content, sender, rootId }) {
+async function sendChatThreadReplyToDiscord(link, { username, avatar, content, sender, rootId, havenMessageId = null }) {
   const guild = guilds.get(String(link.guild_id || ''));
   const { text, files } = await takeUploads(content, sender);
   const body = outboundBody(text, guild);
@@ -2074,7 +2094,10 @@ async function sendChatThreadReplyToDiscord(link, { username, avatar, content, s
       threadId = await discordThreadFor(link, rootId);
       if (!threadId) return;
       const hook = await ensureLinkWebhook(link);
-      await executeWebhook(hook.id, hook.token, await webhookPayload(link, guild, { username, avatar, body }), { threadId, files });
+      const sent = await executeWebhook(hook.id, hook.token, await webhookPayload(link, guild, { username, avatar, body }), { threadId, files });
+      if (havenMessageId && sent && sent.id) {
+        ferryReplies.recordPair(deps.db, { havenMessageId, discordMessageId: sent.id, discordChannelId: threadId });
+      }
       touchLink(link.id, null);
     } catch (err) {
       if (threadId && err.discordCode === 10003) {
@@ -2087,6 +2110,236 @@ async function sendChatThreadReplyToDiscord(link, { username, avatar, content, s
       throw sendFailure(link, err);
     }
   });
+}
+
+// ── Bizarre Bazaar fork: edits and deletes both ways ──────────────────────
+// (src/bazaarFerrySync.js). Discord's edit and delete events change the Haven
+// copies; Haven's edits and deletes are queued by a database trigger and sent
+// from the outbox below.
+
+// What a Haven copy of a message deleted on Discord says when it has thread
+// replies: Discord keeps a thread when its first message goes, and deleting
+// the Haven row would take every reply with it.
+const BAZAAR_DELETED_TEXT = '*[deleted on Discord]*';
+
+function bazaarEditFromDiscord(msg) {
+  if (msg.webhook_id && ownWebhookIds.has(msg.webhook_id)) return;
+  if (botUser && msg.author && msg.author.id === botUser.id) return;
+  if (msg.author && msg.author.bot && !boolSetting('ferry_relay_bots', false)) return;
+  // Only Haven copies of Discord messages (no Haven author) change, and a
+  // protected one stays as it is.
+  const rows = bazaarFerrySync.havenCopies(deps.db, msg.id).filter(r => r.user_id == null && !r.is_archived);
+  if (!rows.length) return;
+  const fresh = buildHavenContent(msg);
+  // History copied by the importer keeps its pictures and files in Haven;
+  // Discord's own links to them expire, so only the words are replaced.
+  const words = buildHavenContent({ ...msg, attachments: [], components: [], sticker_items: [] });
+  for (const row of rows) {
+    const kept = String(row.content || '').split('\n').filter(line => line.includes('/uploads/'));
+    const content = kept.length ? [words, ...kept].filter(Boolean).join('\n') : fresh;
+    if (!content || content === row.content) continue;
+    try {
+      const done = deps.db.prepare('UPDATE messages SET content = ?, edited_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id IS NULL AND is_archived = 0').run(content, row.id);
+      if (!done.changes) continue;
+      deps.io.to(`channel:${row.channel_code}`).emit('message-edited', { channelCode: row.channel_code, messageId: row.id, content, editedAt: new Date().toISOString() });
+    } catch (err) {
+      console.error('Ferry could not apply a Discord edit:', err.message);
+    }
+  }
+}
+
+function bazaarDeleteFromDiscord(discordIds) {
+  const db = deps && deps.db;
+  if (!db) return;
+  for (const discordId of discordIds) {
+    let rows = [];
+    try { rows = bazaarFerrySync.havenCopies(db, discordId); } catch (err) { console.error('Ferry delete lookup error:', err.message); }
+    for (const row of rows) {
+      // Protected means kept, whoever asks.
+      if (row.is_archived) continue;
+      try {
+        if (db.prepare('SELECT 1 FROM messages WHERE thread_id = ? LIMIT 1').get(row.id)) {
+          db.prepare('UPDATE messages SET content = ?, edited_at = CURRENT_TIMESTAMP WHERE id = ?').run(BAZAAR_DELETED_TEXT, row.id);
+          bazaarFerrySync.forget(db, [row.id]);
+          deps.io.to(`channel:${row.channel_code}`).emit('message-edited', { channelCode: row.channel_code, messageId: row.id, content: BAZAAR_DELETED_TEXT, editedAt: new Date().toISOString() });
+          continue;
+        }
+        db.transaction(() => {
+          db.prepare('DELETE FROM pinned_messages WHERE message_id = ?').run(row.id);
+          db.prepare('DELETE FROM reactions WHERE message_id = ?').run(row.id);
+          db.prepare('DELETE FROM messages WHERE id = ?').run(row.id);
+          bazaarFerrySync.forget(db, [row.id]);
+        })();
+        deps.io.to(`channel:${row.channel_code}`).emit('message-deleted', { channelCode: row.channel_code, messageId: row.id });
+      } catch (err) {
+        // A protected reply keeps its thread's first message (messages_keep_protected).
+        console.warn(`[ferry] could not delete Haven message ${row.id} deleted on Discord: ${err.message}`);
+      }
+    }
+  }
+}
+
+let bazaarOutboxTimer = null;
+let bazaarOutboxBusy = false;
+const bazaarGoneThreads = new Set();   // Discord threads this process deleted or found gone
+const bazaarAttempts = new Map();      // outbox row id -> failed sends
+
+function bazaarStartOutbox() {
+  if (bazaarOutboxTimer) return;
+  bazaarOutboxTimer = setInterval(() => {
+    bazaarDrainOutbox().catch(err => console.error('[ferry] edit/delete sync error:', err.message));
+  }, 3000);
+  if (bazaarOutboxTimer.unref) bazaarOutboxTimer.unref();
+}
+
+async function bazaarDrainOutbox() {
+  const db = deps && deps.db;
+  if (!db || bazaarOutboxBusy) return;
+  const cfg = getConfig();
+  if (!cfg.enabled || !cfg.token || bazaarFerrySync.mode(db) !== 'on') return;
+  if (bazaarFerrySync.burst(db) > bazaarFerrySync.BURST_LIMIT) {
+    bazaarFerrySync.setMode(db, 'paused');
+    console.warn(`[ferry] Edit/delete sync to Discord PAUSED: more than ${bazaarFerrySync.BURST_LIMIT} were queued within a minute. Nothing was sent; they wait in bazaar_ferry_outbox until bazaar_ferry_sync_out is set back to 'on'.`);
+    return;
+  }
+  bazaarOutboxBusy = true;
+  try {
+    // Whole threads first, so their replies need no calls of their own.
+    for (const root of bazaarFerrySync.pendingThreadRoots(db)) {
+      if (bazaarFerrySync.outboundLinks(db, root.channel_id).length) await bazaarDeleteThreads(root);
+    }
+    for (const row of bazaarFerrySync.nextBatch(db)) {
+      try {
+        await bazaarSendRow(row);
+      } catch (err) {
+        // Rate limited: the rest waits for the next round.
+        if (err.status === 429) return;
+        const tries = (bazaarAttempts.get(row.id) || 0) + 1;
+        if (tries < 3 && (err.status === undefined || err.status >= 500)) { bazaarAttempts.set(row.id, tries); continue; }
+        console.warn(`[ferry] could not ${row.kind} Haven message ${row.haven_message_id} on Discord: ${err.message}`);
+      }
+      bazaarAttempts.delete(row.id);
+      bazaarFerrySync.done(db, row.id);
+      if (row.kind === 'delete') db.prepare('DELETE FROM ferry_message_map WHERE haven_message_id = ?').run(row.haven_message_id);
+    }
+  } finally {
+    bazaarOutboxBusy = false;
+  }
+}
+
+function bazaarSendRow(row) {
+  const link = bazaarFerrySync.outboundLinks(deps.db, row.channel_id)[0];
+  // Not paired any more, or never was.
+  if (!link) return null;
+  return row.kind === 'delete' ? bazaarDeleteOnDiscord(row, link) : bazaarEditOnDiscord(row, link);
+}
+
+const BAZAAR_NOT_THERE = new Set([10003, 10008, 50001]);   // unknown channel, unknown message, no access
+
+// A thread's first message: its whole Discord thread goes, replies and all,
+// when the bot may (Manage Threads). Otherwise its messages go one by one.
+// Only an id Discord says is a thread is deleted, never a channel.
+const bazaarCheckedThreads = new Set();
+async function bazaarDeleteThreads(row) {
+  for (const threadId of bazaarFerrySync.threadsToDelete(deps.db, row)) {
+    if (bazaarGoneThreads.has(threadId) || bazaarCheckedThreads.has(threadId)) continue;
+    bazaarCheckedThreads.add(threadId);
+    try {
+      const ch = await discordRequest('GET', `/channels/${threadId}`);
+      if (ch && [10, 11, 12].includes(ch.type)) {
+        await discordRequest('DELETE', `/channels/${threadId}`);
+        bazaarGoneThreads.add(threadId);
+      }
+    } catch (err) {
+      if (err.status === 403 || err.status === 404 || BAZAAR_NOT_THERE.has(err.discordCode)) continue;
+      bazaarCheckedThreads.delete(threadId);
+      throw err;
+    }
+  }
+  if (bazaarCheckedThreads.size > 5000) bazaarCheckedThreads.clear();
+}
+
+async function bazaarDeleteOnDiscord(row, link) {
+  await bazaarDeleteThreads(row);
+  for (const copy of bazaarFerrySync.discordCopies(deps.db, row, link)) {
+    // Gone with its thread.
+    if (bazaarGoneThreads.has(copy.messageId)) continue;
+    if (row.thread_id && copy.channels.some(c => bazaarGoneThreads.has(c))) continue;
+    for (const channelId of copy.channels) {
+      try {
+        await discordRequest('DELETE', `/channels/${channelId}/messages/${copy.messageId}`);
+        break;
+      } catch (err) {
+        if (BAZAAR_NOT_THERE.has(err.discordCode) || err.status === 404) continue;
+        throw err;
+      }
+    }
+  }
+  if (bazaarGoneThreads.size > 5000) bazaarGoneThreads.clear();
+}
+
+// Haven's text for a Discord copy: the files went along as attachments when
+// it was sent, and an edit keeps them, so only the words are sent.
+function bazaarEditText(content, sender) {
+  return keepOwnUploads(content, sender).content
+    .replace(UPLOAD_FILE_RE, '')
+    .replace(UPLOAD_PIC_RE, (m, pre) => pre)
+    .replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+async function bazaarEditOnDiscord(row, link) {
+  const msg = deps.db.prepare(`
+    SELECT m.id, m.content, m.reply_to, m.thread_id, u.id AS user_id, u.is_admin
+    FROM messages m JOIN users u ON u.id = m.user_id WHERE m.id = ?
+  `).get(row.haven_message_id);
+  if (!msg) return;
+  const guild = guilds.get(String(link.guild_id || ''));
+  const sender = { id: msg.user_id, isAdmin: !!msg.is_admin };
+  const pairs = deps.db.prepare('SELECT discord_message_id, discord_channel_id FROM ferry_message_map WHERE haven_message_id = ?').all(msg.id);
+  if (!pairs.length) return;
+  const hook = await ensureLinkWebhook(link);
+  for (const pair of pairs) {
+    const threadId = pair.discord_channel_id !== String(link.discord_channel_id) ? pair.discord_channel_id : null;
+    // A chat line keeps the line naming what it answers, as when it was sent.
+    const lead = !msg.thread_id && !isForumType(link.discord_channel_type)
+      ? ferryReplies.replyLine(deps.db, { replyToHavenId: msg.reply_to, link: threadId ? { ...link, discord_channel_id: threadId } : link, guildId: link.guild_id })
+      : '';
+    const body = outboundBody(lead + bazaarEditText(msg.content, sender), guild);
+    if (!body.trim()) continue;
+    const payload = await webhookPayload(link, guild, { username: 'Haven', avatar: null, body });
+    try {
+      await bazaarWebhookEdit(hook, pair.discord_message_id, { content: payload.content, allowed_mentions: payload.allowed_mentions }, threadId);
+    } catch (err) {
+      if (BAZAAR_NOT_THERE.has(err.discordCode) || err.status === 404) continue;
+      throw err;
+    }
+  }
+}
+
+async function bazaarWebhookEdit(hook, messageId, body, threadId, attempt = 0) {
+  const thread = threadId && SNOWFLAKE.test(String(threadId)) ? `?thread_id=${threadId}` : '';
+  const res = await fetch(`${API}/webhooks/${hook.id}/${hook.token}/messages/${messageId}${thread}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'User-Agent': USER_AGENT },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (res.status === 429) {
+    const wait = await rateLimitWaitMs(res);
+    if (attempt < RATE_LIMIT_ATTEMPTS - 1 && wait <= RATE_LIMIT_MAX_WAIT_MS) {
+      await sleep(wait);
+      return bazaarWebhookEdit(hook, messageId, body, threadId, attempt + 1);
+    }
+    throw rateLimitError(wait);
+  }
+  if (!res.ok) {
+    let data = null;
+    try { data = await res.json(); } catch { /* no body: the status says enough */ }
+    const err = new Error(data?.message || `HTTP ${res.status}`);
+    err.status = res.status;
+    err.discordCode = data?.code;
+    throw err;
+  }
 }
 
 /**
@@ -2317,6 +2570,7 @@ function initFerry(dependencies) {
   if (getConfig().enabled && getConfig().token) {
     connect();
   }
+  bazaarStartOutbox(); // Bizarre Bazaar fork
 }
 
 /** Called after an admin changes any Ferry setting. */
@@ -2436,6 +2690,7 @@ module.exports = {
   sendTopicToDiscord,
   sendReplyToDiscord,
   sendChatThreadReplyToDiscord,
+  bazaarDrainOutbox, // Bizarre Bazaar fork, for tests
   sendDiscordDm,
   authorizeDmTarget,
   verifyToken,
