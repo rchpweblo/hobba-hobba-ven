@@ -272,6 +272,56 @@ test('edits and deletes cross both ways', async (t) => {
     assert.ok(edited.content.includes(lines[1]), 'the copy is kept');
   });
 
+  await t.test("Discord's stickers come into Haven, and go back out", async () => {
+    const PIG = '1400000000000000001';
+    const update = (stickers) => discord.dispatch('GUILD_STICKERS_UPDATE', { guild_id: GUILD_ID, stickers });
+    const library = next(A, 'library-updated', (d) => d && d.kind === 'stickers', 10000);
+    update([
+      { id: PIG, name: 'Big Pig', format_type: 1 },
+      { id: '1400000000000000002', name: 'wumpus wave', format_type: 3 },
+    ]);
+    const pig = await until(() => db.prepare("SELECT name, filename FROM stickers WHERE pack_name = 'Discord'").get(), 10000);
+    assert.deepStrictEqual(pig, { name: 'big_pig', filename: `discord-${PIG}.png` }, "the guild's sticker is in the picker");
+    assert.ok(fs.existsSync(path.join(DATA, 'uploads', 'stickers', pig.filename)), 'stored');
+    assert.ok(await library, 'open pickers are told');
+    assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM stickers WHERE pack_name = 'Discord'").get().n, 1, 'a Lottie sticker is left out');
+
+    // Removed in Haven, it stays removed.
+    db.prepare("DELETE FROM stickers WHERE pack_name = 'Discord'").run();
+    update([{ id: PIG, name: 'Big Pig', format_type: 1 }]);
+    await wait(1500);
+    assert.strictEqual(db.prepare("SELECT COUNT(*) n FROM stickers WHERE pack_name = 'Discord'").get().n, 0, 'not put back');
+
+    const relayed = async (stickers, content = '') => {
+      const MID = discord.newId();
+      discord.dispatch('MESSAGE_CREATE', discordMessage(MID, TEXT_ID, content, { sticker_items: stickers }));
+      return { MID, row: await until(() => db.prepare('SELECT id, content FROM messages WHERE discord_message_id = ?').get(MID)) };
+    };
+    const known = await relayed([{ id: PIG, name: 'Big Pig', format_type: 1 }]);
+    assert.strictEqual(known.row.content, `/uploads/stickers/discord-${PIG}.png`, 'a copied sticker shows at once');
+
+    const other = await relayed([{ id: '1400000000000000003', name: 'Hanging', format_type: 4 }]);
+    // Another server's sticker: Discord's picture first (often too briefly to see), then the copy.
+    assert.ok(await until(() => db.prepare("SELECT 1 FROM messages WHERE id = ? AND content = '/uploads/stickers/discord-1400000000000000003.gif'").get(other.row.id), 10000), 'then the copy');
+
+    const lottie = await relayed([{ id: '1400000000000000002', name: 'wumpus wave', format_type: 3 }]);
+    assert.strictEqual(lottie.row.content, '*[sticker: wumpus wave]*', 'a Lottie sticker by name');
+
+    // A pasted sticker link ("Copy link" on a sticker). Typed links meet the
+    // link filter first, which on this server keeps Discord's domain out.
+    const { linksIn } = require('../src/bazaarStickers');
+    const url = 'https://media.discordapp.net/stickers/1400000000000000004.png?size=160&name=Nugdups';
+    assert.deepStrictEqual(linksIn(`lol [Nugdups](${url})`), [{ url, id: '1400000000000000004', name: 'Nugdups', format: 1 }]);
+
+    // A Haven sticker goes to Discord as its picture.
+    const sentNow = discord.executions.length;
+    A.emit('send-message', { code: talk.code, content: `/uploads/stickers/discord-${PIG}.png` });
+    const out = await until(() => discord.executions.slice(sentNow).find((e) => e.body && Array.isArray(e.body.files) && e.body.files.length));
+    assert.ok(out, 'sent with the picture attached');
+    assert.strictEqual(out.body.files[0].filename, `discord-${PIG}.png`);
+    assert.ok(!String(out.body.content || '').includes('file not found'));
+  });
+
   await t.test('deleting a whole channel deletes nothing on Discord', async () => {
     const before = discord.deletions.length;
     const MID = discord.newId();

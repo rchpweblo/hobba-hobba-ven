@@ -46,6 +46,7 @@ const ferryReplies = require('./ferryReplies');
 const bazaarFerryThreads = require('./bazaarFerryThreads');
 const bazaarFerrySync = require('./bazaarFerrySync');
 const importFiles = require('./importFiles');
+const bazaarStickers = require('./bazaarStickers');
 
 /**
  * The tests run Ferry against a stand-in Discord on this machine, set through
@@ -520,6 +521,11 @@ function handleDispatch(type, d) {
 
     case 'GUILD_CREATE':
       cacheGuild(d);
+      bazaarSyncStickers(d.stickers); // Bizarre Bazaar fork
+      break;
+
+    case 'GUILD_STICKERS_UPDATE': // Bizarre Bazaar fork
+      bazaarSyncStickers(d.stickers);
       break;
 
     case 'GUILD_UPDATE': {
@@ -1258,8 +1264,10 @@ function buildHavenContent(msg) {
   // media gallery component and leaves `attachments` empty, so walking the
   // attachments alone relayed those posts as nothing. Amnibro spotted this.
   collectComponentMedia(msg.components, media);
+  // Bizarre Bazaar fork: Haven's copy of the sticker once there is one
+  // (src/bazaarStickers.js); until then Discord's picture, copied after.
   for (const sticker of msg.sticker_items || []) {
-    media.push(`https://media.discordapp.net/stickers/${sticker.id}.png`);
+    media.push(bazaarStickers.lineFor(deps && deps.db, sticker));
   }
   // Discord attaches two kinds of embed, and they mean different things.
   //
@@ -1619,6 +1627,11 @@ function attachmentName(name) {
 const UPLOAD_FILE_RE = /(spoiler-img:)?\[file:([^\]]*)\]\(\/uploads\/([^)|\s]+)(?:\|[^)]*)?\)/g;
 const UPLOAD_PIC_RE = /(^|\s)(spoiler-img:)?\/uploads\/([^\s]+)/g;
 const UPLOAD_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const BAZAAR_STICKER_PATH_RE = /^stickers\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
+function bazaarIsLibrarySticker(stored) {
+  const file = stored.slice('stickers/'.length);
+  return !!deps.db.prepare('SELECT 1 FROM stickers WHERE filename = ? UNION SELECT 1 FROM bazaar_discord_stickers WHERE filename = ?').get(file, file);
+}
 
 /**
  * Whether `sender` may carry an upload to Discord. A message names its files
@@ -1680,7 +1693,11 @@ async function takeUploads(content, sender) {
   const liveBytes = deps.db.prepare("SELECT bytes FROM media_objects WHERE rel_path = ? AND state = 'live'");
   // Returns null when the file goes along, or why it cannot.
   const take = (stored, shownName, spoiler = false) => {
-    if (!UPLOAD_NAME_RE.test(stored)) return '(file not found)';
+    // Bizarre Bazaar fork: a sticker from Haven's library (anyone's to send)
+    // goes as its picture; upstream sent "(file not found)".
+    const sticker = BAZAAR_STICKER_PATH_RE.test(stored) && bazaarIsLibrarySticker(stored);
+    if (sticker) shownName = shownName || stored.slice('stickers/'.length);
+    if (!UPLOAD_NAME_RE.test(stored) && !sticker) return '(file not found)';
     const size = liveBytes.get(stored)?.bytes;
     if (size === undefined) return '(file not found)'; // deleted since it was posted
     if (files.length >= DISCORD_FILES_PER_MESSAGE || size > DISCORD_FILE_MAX || total + size > DISCORD_UPLOAD_TOTAL) {
@@ -2129,7 +2146,7 @@ const BAZAAR_TEST_CDN = loopbackOverride(process.env.FERRY_TEST_DISCORD_CDN, nul
 const bazaarFetchFile = BAZAAR_TEST_CDN
   ? (url, opts) => fetch(String(url).replace(/^https:\/\/(?:cdn\.discordapp\.com|media\.discordapp\.net)/, BAZAAR_TEST_CDN), opts)
   : fetch;
-const BAZAAR_HAS_DISCORD_FILE = /https:\/\/(?:cdn\.discordapp\.com|media\.discordapp\.net)\/attachments\//;
+const BAZAAR_HAS_DISCORD_FILE = /https:\/\/(?:cdn\.discordapp\.com|media\.discordapp\.net)\/(?:attachments|stickers)\//;
 let bazaarCopyChain = Promise.resolve();
 const bazaarCopying = new Set();
 
@@ -2149,6 +2166,15 @@ function bazaarCopyFilesOnInsert() {
   }
 }
 
+// The guild's stickers go into Haven's picker, each the first time it is seen.
+function bazaarSyncStickers(stickers) {
+  if (!Array.isArray(stickers) || !stickers.length) return;
+  bazaarCopyChain = bazaarCopyChain
+    .then(() => bazaarStickers.syncGuild(deps.db, stickers, { fetchImpl: bazaarFetchFile }))
+    .then((added) => { if (added) deps.io.emit('library-updated', { kind: 'stickers' }); })
+    .catch(err => console.warn("[ferry] Could not copy the guild's stickers:", err.message));
+}
+
 function bazaarCopyFilesLater(messageId, channelCode, discordMessageId) {
   if (!Number.isInteger(messageId) || bazaarCopying.has(messageId)) return;
   bazaarCopying.add(messageId);
@@ -2163,6 +2189,11 @@ async function bazaarCopyFiles(messageId, channelCode, discordMessageId) {
   const setting = parseInt(getSetting('max_upload_mb', '25'), 10) || 25;
   const capBytes = Math.max(setting, BAZAAR_DISCORD_MAX_FILE_MB) * 1024 * 1024;
   const { replacements } = await importFiles.copyDiscordLinks(row.content, { capBytes, fetchImpl: bazaarFetchFile });
+  // Stickers go to uploads/stickers/, where Haven shows them as stickers.
+  for (const s of bazaarStickers.linksIn(row.content)) {
+    const line = await bazaarStickers.copy(deps.db, s, { fetchImpl: bazaarFetchFile });
+    if (line) replacements.set(s.url, line);
+  }
   if (!replacements.size) return;
   // Applied to the text as it is now, in case an edit came in meanwhile.
   const now = deps.db.prepare('SELECT content FROM messages WHERE id = ?').get(messageId);

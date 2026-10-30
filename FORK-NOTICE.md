@@ -195,3 +195,13 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   Files: `src/ferry.js`, `src/importFiles.js`, `public/js/modules/app-socket-events.js`,
   `public/js/app.js`. Test: `test/bazaarFerrySync.test.js`, with Discord's file servers added to
   `test/fakeDiscord.js`.
+- **Discord's stickers are Haven stickers.** A sticker sent on Discord is copied once into
+  `uploads/stickers/` as `discord-<id>.png` (or `.gif`) and shows in Haven as a sticker; upstream
+  relayed a link to Discord's picture. The guild's own stickers also go into the sticker picker as
+  a "Discord" pack, each the first time Ferry sees it (GUILD_CREATE, GUILD_STICKERS_UPDATE), so
+  one an admin removes in Haven stays removed. Discord's Lottie stickers become
+  "*[sticker: name]*". A pasted sticker link is copied the same way. Going out, a sticker from
+  Haven's library is sent to Discord as its picture; upstream wrote "(file not found)". The
+  importer keeps a message that is only a sticker, which upstream left out.
+  Files: `src/bazaarStickers.js` (new, with table `bazaar_discord_stickers`), `src/ferry.js`,
+  `src/database.js`, `src/routes/import.js`. Test: `test/bazaarFerrySync.test.js`.

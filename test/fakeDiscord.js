@@ -124,7 +124,7 @@ function startFakeDiscord(port) {
 
       // Bizarre Bazaar fork: Discord's file servers. A name with "gone" in it
       // has expired.
-      if (req.method === 'GET' && parts[0] === 'attachments') {
+      if (req.method === 'GET' && (parts[0] === 'attachments' || (parts[0] === 'stickers' && /\.(png|gif)$/.test(url.pathname)))) {
         if (/gone/.test(url.pathname)) return json(res, 404, { message: 'This content is no longer available.' });
         const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
         res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': bytes.length });

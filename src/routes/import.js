@@ -12,6 +12,7 @@ const { accessContext, canReadHistory } = require('../discordPermissions');
 const { sanitizeText } = require('../socketHandlers/helpers');
 const { unescapeDiscord, forwardedMessage, quoteForwarded } = require('../discordText');
 const { copyAttachments } = require('../importFiles');
+const bazaarStickers = require('../bazaarStickers'); // Bizarre Bazaar fork
 
 module.exports = function registerImport(deps) {
   const { uploadDiskGuard, app, verifyAdminFromDb, uploadLimiter, importUpload } = deps;
@@ -386,7 +387,7 @@ module.exports = function registerImport(deps) {
             if (msg.type !== 0 && msg.type !== 19) continue; // Default + Reply only
             if (!msg.author?.bot) {
               peopleMessages++;
-              if (!msg.content && !msg.attachments?.length && !msg.embeds?.length && !msg.message_snapshots?.length) emptyPeopleMessages++;
+              if (!msg.content && !msg.attachments?.length && !msg.embeds?.length && !msg.message_snapshots?.length && !msg.sticker_items?.length) emptyPeopleMessages++;
             }
             // A forward keeps what was forwarded in a snapshot, not in its own content.
             const fwd = forwardedMessage(msg);
@@ -404,9 +405,13 @@ module.exports = function registerImport(deps) {
             // rather than in it, so a copied picture still shows (importFiles.js).
             const files = (Array.isArray(src.attachments) ? src.attachments : [])
               .map(a => `📎 ${a.url ? '[' + a.filename + '](' + a.url + ')' : a.filename}`);
-            if (!text && !files.length) continue;
+            // Bizarre Bazaar fork: a sticker is a line too, so a message that
+            // is only a sticker is not left out (src/bazaarStickers.js).
+            const stickers = (Array.isArray(src.sticker_items) ? src.sticker_items : [])
+              .map(s => bazaarStickers.lineFor(require('../database').getDb(), s)).filter(Boolean);
+            if (!text && !files.length && !stickers.length) continue;
             const head = src !== msg ? quoteForwarded(text) : text;
-            const content = [head, ...files].filter(Boolean).join('\n');
+            const content = [head, ...files, ...stickers].filter(Boolean).join('\n');
 
             messages.push({
               discordId: msg.id,
