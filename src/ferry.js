@@ -45,6 +45,7 @@ const { unescapeDiscord, forwardedMessage, quoteForwarded } = require('./discord
 const ferryReplies = require('./ferryReplies');
 const bazaarFerryThreads = require('./bazaarFerryThreads');
 const bazaarFerrySync = require('./bazaarFerrySync');
+const importFiles = require('./importFiles');
 
 /**
  * The tests run Ferry against a stand-in Discord on this machine, set through
@@ -2112,6 +2113,68 @@ async function sendChatThreadReplyToDiscord(link, { username, avatar, content, s
   });
 }
 
+// ── Bizarre Bazaar fork: Discord's files are copied into Haven ────────────
+// A relayed message carries Discord's links to its pictures and files, and
+// Discord signs those links so they stop working after about a day. Each
+// message Ferry brings in is posted at once, as upstream; its files are then
+// copied into Haven one message at a time (src/importFiles.js), and the
+// links are swapped for the copies. Open screens get the new text without an
+// "edited" mark. A file that cannot be copied (over the size cap, already
+// gone) stays the link it was. The cap is the server's upload limit, but at
+// least Discord's own largest upload, because these are Discord's files kept
+// for the archive rather than uploads made in Haven.
+const BAZAAR_DISCORD_MAX_FILE_MB = 500;
+// Tests serve Discord's files from the stand-in Discord (loopback only, as above).
+const BAZAAR_TEST_CDN = loopbackOverride(process.env.FERRY_TEST_DISCORD_CDN, null, ['http:']);
+const bazaarFetchFile = BAZAAR_TEST_CDN
+  ? (url, opts) => fetch(String(url).replace(/^https:\/\/(?:cdn\.discordapp\.com|media\.discordapp\.net)/, BAZAAR_TEST_CDN), opts)
+  : fetch;
+const BAZAAR_HAS_DISCORD_FILE = /https:\/\/(?:cdn\.discordapp\.com|media\.discordapp\.net)\/attachments\//;
+let bazaarCopyChain = Promise.resolve();
+const bazaarCopying = new Set();
+
+function bazaarCopyFilesOnInsert() {
+  for (const key of ['insertHavenMessage', 'insertHavenThreadReply']) {
+    const insert = deps[key];
+    if (typeof insert !== 'function' || insert.bazaarCopies) continue;
+    const wrapped = function (args) {
+      const id = insert.call(this, args);
+      if (id && args && BAZAAR_HAS_DISCORD_FILE.test(String(args.content || ''))) {
+        bazaarCopyFilesLater(Number(id), args.channelCode, args.discordMessageId);
+      }
+      return id;
+    };
+    wrapped.bazaarCopies = true;
+    deps[key] = wrapped;
+  }
+}
+
+function bazaarCopyFilesLater(messageId, channelCode, discordMessageId) {
+  if (!Number.isInteger(messageId) || bazaarCopying.has(messageId)) return;
+  bazaarCopying.add(messageId);
+  bazaarCopyChain = bazaarCopyChain.then(() => bazaarCopyFiles(messageId, channelCode, discordMessageId))
+    .catch(err => console.warn('[ferry] Could not copy a relayed message\'s files:', err.message))
+    .finally(() => bazaarCopying.delete(messageId));
+}
+
+async function bazaarCopyFiles(messageId, channelCode, discordMessageId) {
+  const row = deps.db.prepare('SELECT content FROM messages WHERE id = ?').get(messageId);
+  if (!row) return;
+  const setting = parseInt(getSetting('max_upload_mb', '25'), 10) || 25;
+  const capBytes = Math.max(setting, BAZAAR_DISCORD_MAX_FILE_MB) * 1024 * 1024;
+  const { replacements } = await importFiles.copyDiscordLinks(row.content, { capBytes, fetchImpl: bazaarFetchFile });
+  if (!replacements.size) return;
+  // Applied to the text as it is now, in case an edit came in meanwhile.
+  const now = deps.db.prepare('SELECT content FROM messages WHERE id = ?').get(messageId);
+  if (!now) return;
+  const content = importFiles.applyReplacements(now.content, replacements);
+  if (content === now.content) return;
+  deps.db.prepare('UPDATE messages SET content = ? WHERE id = ?').run(content, messageId);
+  // The edit path reads the database from now on, which keeps these copies.
+  if (discordMessageId) relayedMessages.delete(String(discordMessageId));
+  if (channelCode) deps.io.to(`channel:${channelCode}`).emit('message-edited', { channelCode, messageId, content, quiet: true });
+}
+
 // ── Bizarre Bazaar fork: edits and deletes both ways ──────────────────────
 // (src/bazaarFerrySync.js). Discord's edit and delete events change the Haven
 // copies; Haven's edits and deletes are queued by a database trigger and sent
@@ -2567,6 +2630,7 @@ function initFerry(dependencies) {
     console.warn('[ferry] Could not load webhook ids for the loop guard:', err.message);
   }
 
+  bazaarCopyFilesOnInsert(); // Bizarre Bazaar fork
   if (getConfig().enabled && getConfig().token) {
     connect();
   }

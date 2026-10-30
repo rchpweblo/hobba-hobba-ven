@@ -183,3 +183,14 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   Test: `test/bazaarFerrySync.test.js`, with delete and edit routes added to `test/fakeDiscord.js`.
 - **The voice bubble is half again as big**, and follows the reduced-motion setting when it
   scrolls to a channel. File: `public/js/modules/app-bazaar-voice-bubble.js`.
+- **Ferry copies Discord's files into Haven.** A message Ferry brings in from Discord is posted at
+  once with Discord's links to its pictures and files, as upstream; then each file on Discord's
+  file servers is copied into Haven like an import's attachments (`src/importFiles.js`, privacy
+  pass included), and the link becomes the picture, or the file with its player or download
+  button. Discord signs those links and they stop working after about a day, so upstream's
+  relayed pictures went dead. Links people paste count too. Open screens get the new text with no
+  "edited" mark. The size cap is the server's upload limit, but at least 500 MB (Discord's largest
+  upload); a file over it, or already gone, stays a link.
+  Files: `src/ferry.js`, `src/importFiles.js`, `public/js/modules/app-socket-events.js`,
+  `public/js/app.js`. Test: `test/bazaarFerrySync.test.js`, with Discord's file servers added to
+  `test/fakeDiscord.js`.

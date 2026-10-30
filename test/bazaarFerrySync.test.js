@@ -63,6 +63,7 @@ async function bootServer() {
       NODE_ENV: 'test',
       FERRY_TEST_DISCORD_API: `http://127.0.0.1:${DISCORD_PORT}`,
       FERRY_TEST_DISCORD_GATEWAY: `ws://127.0.0.1:${DISCORD_PORT}`,
+      FERRY_TEST_DISCORD_CDN: `http://127.0.0.1:${DISCORD_PORT}`,
     },
     stdio: 'ignore',
   });
@@ -240,6 +241,35 @@ test('edits and deletes cross both ways', async (t) => {
     assert.strictEqual(outbox(), 201, 'all still waiting');
     db.prepare('DELETE FROM bazaar_ferry_outbox').run();
     setMode('on');
+  });
+
+  await t.test("a relayed message's Discord files are copied into Haven", async () => {
+    const MID = discord.newId();
+    const quiet = next(A, 'message-edited', (d) => d && d.quiet === true, 10000);
+    discord.dispatch('MESSAGE_CREATE', discordMessage(MID, TEXT_ID, 'look at this', {
+      attachments: [
+        { id: '11', filename: 'cat.png', url: 'https://cdn.discordapp.com/attachments/1/2/cat.png?ex=1&is=2&hm=3&' },
+        { id: '12', filename: 'gone.png', url: 'https://cdn.discordapp.com/attachments/1/3/gone.png?ex=1' },
+      ],
+    }));
+    const row = await until(() => db.prepare("SELECT id, content FROM messages WHERE discord_message_id = ? AND content LIKE '%/uploads/%'").get(MID), 10000);
+    assert.ok(row, 'the copy is in the message');
+    const lines = row.content.split('\n');
+    assert.strictEqual(lines[0], 'look at this');
+    assert.match(lines[1], /^\/uploads\/\d+-[0-9a-f]{16}\.png$/, 'the picture is a Haven upload');
+    assert.ok(fs.existsSync(path.join(DATA, 'uploads', lines[1].slice('/uploads/'.length))), 'stored on disk');
+    assert.strictEqual(lines[2], 'https://cdn.discordapp.com/attachments/1/3/gone.png?ex=1', 'an expired file stays a link');
+    const ev = await quiet;
+    assert.ok(ev && ev.messageId === row.id, 'open screens get it without an edited mark');
+    assert.strictEqual(db.prepare('SELECT edited_at FROM messages WHERE id = ?').get(row.id).edited_at, null, 'not marked edited');
+
+    // A later Discord edit changes the words and keeps the copy.
+    discord.dispatch('MESSAGE_UPDATE', discordMessage(MID, TEXT_ID, 'look at this cat', {
+      attachments: [{ id: '11', filename: 'cat.png', url: 'https://cdn.discordapp.com/attachments/1/2/cat.png?ex=9' }],
+    }));
+    const edited = await until(() => db.prepare("SELECT content FROM messages WHERE id = ? AND content LIKE 'look at this cat%'").get(row.id));
+    assert.ok(edited, 'edited');
+    assert.ok(edited.content.includes(lines[1]), 'the copy is kept');
   });
 
   await t.test('deleting a whole channel deletes nothing on Discord', async () => {

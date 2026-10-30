@@ -456,7 +456,9 @@ _listenMessageChanges() {
         contentEl.innerHTML = this._formatContent(displayContent);
         msgEl.dataset.rawContent = displayContent;
         let editedTag = msgEl.querySelector('.edited-tag');
-        if (!editedTag) {
+        // Bizarre Bazaar fork: Ferry swapping Discord's file links for Haven's
+        // copies is not an edit (`quiet`).
+        if (!editedTag && !data.quiet) {
           editedTag = document.createElement('span');
           editedTag.className = 'edited-tag';
           editedTag.title = t('header.messages.edited_at', { date: this._fmtDateTime(data.editedAt) });

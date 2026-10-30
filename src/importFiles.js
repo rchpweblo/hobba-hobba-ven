@@ -125,4 +125,57 @@ async function copyAttachments(content, { capBytes, state = {}, fetchImpl = fetc
   return lines.join('\n');
 }
 
-module.exports = { copyAttachments, isDiscordFile, sizeLabel };
+// Bizarre Bazaar fork: every link to a file on Discord's file servers in a
+// message, wherever it sits (Ferry writes attachments as bare links, and
+// people paste them). Each is copied as copyAttachments does, and the result
+// says what to put in place of each link that was copied: the picture, or
+// the file with its player or download button. Never throws.
+const DISCORD_FILE_LINK = /https:\/\/(?:cdn\.discordapp\.com|media\.discordapp\.net)\/attachments\/[^\s)<>"'\]|]+/g;
+
+function nameFromLink(url) {
+  try { return decodeURIComponent(new URL(url).pathname.split('/').pop() || 'file'); } catch { return 'file'; }
+}
+
+async function copyDiscordLinks(content, { capBytes, fetchImpl = fetch, admit = null } = {}) {
+  const found = [...new Set(String(content || '').match(DISCORD_FILE_LINK) || [])].filter(isDiscordFile);
+  const replacements = new Map();
+  if (!found.length) return { replacements, failed: 0 };
+  const admitFile = admit || require('./privacyPass').admitFile;
+  let failed = 0;
+  for (const url of found) {
+    if (!diskGuard.hasHeadroom(0)) { failed += 1; continue; }
+    try {
+      const name = nameFromLink(url);
+      const got = await copyOne(url, name, { capBytes, fetchImpl, admit: admitFile });
+      if (!got) { failed += 1; continue; }
+      const stored = `/uploads/${got.stored}`;
+      replacements.set(url, IMAGE_EXTS.has(extOf(got.stored)) ? stored : `[file:${safeName(name)}](${stored}|${sizeLabel(got.size)})`);
+    } catch (err) {
+      failed += 1;
+      console.warn('[ferry] Could not copy a Discord file, keeping the link:', err.message);
+    }
+  }
+  return { replacements, failed };
+}
+
+// The links in `content` swapped for what replaced them. A picture or file
+// only shows as one on a line of its own, so a link in the middle of a
+// sentence (or inside [text](link) or <link>) becomes its own line there.
+function applyReplacements(content, replacements) {
+  let out = String(content || '');
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  for (const [url, put] of replacements) {
+    const wrapped = new RegExp(`\\[[^\\]\\n]*\\]\\(${esc(url)}\\)|<${esc(url)}>|${esc(url)}`, 'g');
+    out = out.split('\n').map((line) => {
+      if (!line.includes(url)) return line;
+      const quote = line.startsWith('> ') ? '> ' : '';
+      const body = quote ? line.slice(2) : line;
+      return body.replace(wrapped, '\n' + put + '\n')
+        .split('\n').map(l => l.trim()).filter(Boolean)
+        .map(l => quote + l).join('\n');
+    }).join('\n');
+  }
+  return out;
+}
+
+module.exports = { copyAttachments, isDiscordFile, sizeLabel, copyDiscordLinks, applyReplacements, DISCORD_FILE_LINK };

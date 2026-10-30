@@ -122,6 +122,14 @@ function startFakeDiscord(port) {
         try { body = raw ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : null; } catch { body = null; }
       }
 
+      // Bizarre Bazaar fork: Discord's file servers. A name with "gone" in it
+      // has expired.
+      if (req.method === 'GET' && parts[0] === 'attachments') {
+        if (/gone/.test(url.pathname)) return json(res, 404, { message: 'This content is no longer available.' });
+        const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': bytes.length });
+        return res.end(bytes);
+      }
       if (req.method === 'GET' && url.pathname === '/users/@me') {
         return json(res, 200, { id: BOT_ID, username: 'FerryBot', discriminator: '0', avatar: null });
       }

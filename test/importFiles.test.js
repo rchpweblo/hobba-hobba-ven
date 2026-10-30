@@ -75,3 +75,15 @@ test('a forward keeps its quote, the file goes under it', async () => {
 });
 
 test.after(() => fs.rmSync(process.env.HAVEN_DATA_DIR, { recursive: true, force: true }));
+
+// Bizarre Bazaar fork: a copied link gets a line of its own, so it shows.
+test('a swapped link takes a line of its own', () => {
+  const { applyReplacements } = require('../src/importFiles');
+  const swap = new Map([[`${CDN}cat.png?ex=1&is=2&`, '/uploads/1-a.png']]);
+  assert.equal(applyReplacements(`${CDN}cat.png?ex=1&is=2&`, swap), '/uploads/1-a.png');
+  assert.equal(applyReplacements(`.blackpanther ${CDN}cat.png?ex=1&is=2& lol`, swap), '.blackpanther\n/uploads/1-a.png\nlol');
+  assert.equal(applyReplacements(`see [this](${CDN}cat.png?ex=1&is=2&) and <${CDN}cat.png?ex=1&is=2&>`, swap),
+    'see\n/uploads/1-a.png\nand\n/uploads/1-a.png');
+  assert.equal(applyReplacements(`> quoted ${CDN}cat.png?ex=1&is=2&\nnext`, swap), '> quoted\n> /uploads/1-a.png\nnext');
+  assert.equal(applyReplacements('nothing here', swap), 'nothing here');
+});
