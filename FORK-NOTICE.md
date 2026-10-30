@@ -262,3 +262,5 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   `public/js/modules/app-channels.js`, `public/js/modules/app-channel-context.js`,
   `public/js/modules/app-forum.js`, `public/js/modules/app-socket-events.js` and
   `public/locales/en.json`. Test: `test/bazaarBanners.test.js`.
+
+**2026-10-30: Haven v4.27.1 merged in.** Everything above carries over unchanged.
