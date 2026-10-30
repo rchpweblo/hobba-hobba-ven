@@ -5044,5 +5044,22 @@
   "bazaar_thread_pins": {
     "title": "Pinned in this topic",
     "none": "Nothing is pinned in this topic yet."
+  },
+  "bazaar_banner": {
+    "set": "Set Banner Message",
+    "label": "Banner",
+    "hint_channel": "The banner hangs at the top of this channel, above the messages. Everyone in the channel sees it.",
+    "hint_topic": "The banner hangs at the top of this post, above the replies. Everyone who opens the post sees it.",
+    "title": "Title (optional)",
+    "title_placeholder": "A heading for the banner",
+    "body": "Message",
+    "nsfw": "Blur pictures (NSFW)",
+    "remove": "Remove Banner",
+    "remove_confirm": "Remove this banner message?",
+    "need_body": "A banner needs a message.",
+    "edit": "Edit banner",
+    "fold": "Fold banner",
+    "unfold": "Show banner",
+    "reveal": "Show pictures"
   }
 }

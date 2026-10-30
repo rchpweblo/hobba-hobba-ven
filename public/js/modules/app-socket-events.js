@@ -60,6 +60,7 @@ _listenFeatureEvents() {
     this._forumBlogAfterLoad?.();
     this._bazaarThreadPaged?.(data); // Bizarre Bazaar fork
     this._bazaarThreadPinsLoaded?.(data); // Bizarre Bazaar fork
+    this._bazaarBannerThreadLoaded?.(data); // Bizarre Bazaar fork
     this._resetThreadJump?.();
     this._threadJumpToMention?.();
   });

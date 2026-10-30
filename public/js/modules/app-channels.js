@@ -14,6 +14,7 @@ async switchChannel(code) {
   // Voice persists across channel switches, no auto-disconnect
 
   this.currentChannel = code;
+  this._bazaarBannerChannelSwitch?.(code); // Bizarre Bazaar fork: banner messages
   this._typingRender?.();
   // Search panel persists per-context: hide/show it for the channel we just
   // entered (public channels share one, each DM keeps its own). (search-overhaul)

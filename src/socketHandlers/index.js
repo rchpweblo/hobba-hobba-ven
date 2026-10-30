@@ -74,6 +74,7 @@ const registerPermExceptions = require('./permExceptions');
 const registerBazaarRoleExclude = require('./bazaarRoleExclude');
 const registerBazaarRoleBot = require('./bazaarRoleBot');
 const registerBazaarEvents = require('./bazaarEvents');
+const registerBazaarBanners = require('./bazaarBanners');
 const modCases = require('../modCases');
 const { quietRecipients, pingedRecipients } = require('../pushMutes');
 const registerForumUnread = require('./forumUnread');
@@ -3003,6 +3004,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerBazaarRoleExclude(socket, ctx);
     registerBazaarRoleBot(socket, ctx);
     registerBazaarEvents(socket, ctx);
+    registerBazaarBanners(socket, ctx);
     registerAdmin(socket, ctx);
     registerFerry(socket, ctx);
     registerGroupE2E(socket, ctx);

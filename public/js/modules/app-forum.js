@@ -428,6 +428,7 @@ _showForumTopicContextMenu(e, msg) {
   items.push(msg.thread && msg.thread.muted ? item('unmute-topic', '🔔', t('forum.unmute_topic')) : item('mute-topic', '🔕', t('forum.mute_topic')));
   if (canEdit) items.push(item('edit', '✏️', t('forum.edit_post')));
   if (canPin) items.push(msg.pinned ? item('unpin', '📌', t('msg_toolbar.unpin')) : item('pin', '📌', t('msg_toolbar.pin')));
+  if (this._bazaarCanSetTopicBanner?.(msg)) items.push(item('bz-banner', '📜', t('bazaar_banner.set'))); // Bizarre Bazaar fork
   if (canEdit) items.push(msg.closed ? item('reopen', '🔓', t('forum.reopen_topic')) : item('close', '✔', t('forum.close_topic')));
   if (canEdit) items.push(msg.nsfw ? item('unnsfw', '🔞', t('forum.unmark_nsfw')) : item('nsfw', '🔞', t('forum.mark_nsfw_menu')));
   if (this._forumMoveTargets().length && (this.user?.isAdmin || this._hasPerm('delete_message'))) items.push(item('move', '📦', t('forum.move_topic')));
@@ -463,6 +464,8 @@ _showForumTopicContextMenu(e, msg) {
       if (await this._showConfirmModal(t('confirm.pin_message'), '')) this.socket.emit('pin-message', { messageId: msgId });
     } else if (action === 'unpin') {
       this.socket.emit('unpin-message', { messageId: msgId });
+    } else if (action === 'bz-banner') {
+      this._bazaarOpenBannerForm(this.currentChannel, msgId);
     } else if (action === 'close' || action === 'reopen') {
       this.socket.emit('set-topic-meta', { messageId: msgId, title: msg.title || '', tags: Array.isArray(msg.tags) ? msg.tags : [], closed: action === 'close' });
     } else if (action === 'nsfw' || action === 'unnsfw') {

@@ -118,6 +118,7 @@ _openChannelCtxMenu(code, btnEl) {
   // give them a local-only "Hide Channel" to declutter their sidebar instead.
   const hideBtn = menu.querySelector('[data-action="hide-channel"]');
   if (hideBtn) hideBtn.style.display = isAdmin ? '' : 'none';
+  this._bazaarBannerMenuItem?.(menu, ch); // Bizarre Bazaar fork: banner messages
   // Show "Organize" only for parent channels that have sub-channels
   const organizeBtn = menu.querySelector('[data-action="organize"]');
   if (organizeBtn) {

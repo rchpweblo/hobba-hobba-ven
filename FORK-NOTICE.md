@@ -247,3 +247,18 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   by it, and pins the history importer copies are not sent back.
   Files: `src/bazaarFerrySync.js`, `src/ferry.js`, `src/routes/import.js`.
   Tests: `test/bazaarFerrySync.test.js`, `test/fakeDiscord.js`.
+
+- **Banner messages.** Right-click a channel, or a forum post, and choose 📜 Set Banner Message:
+  an optional title, a message with pictures and files, and a blur for NSFW, in a window like
+  Edit post. The banner hangs at the top of the channel (or the post), above the messages, which
+  give up its height and scroll beneath it. A long banner stops at about 40% of the screen and
+  scrolls inside itself, and anyone can fold it to a slim strip, which sticks on that device
+  until the banner changes. One banner a channel and one a forum post; chat threads have none.
+  Set by whoever manages the channel's settings, and for a forum post also its starter. Haven
+  only: Discord has nothing like it.
+  Files: `src/bazaarBanners.js` (new), `src/socketHandlers/bazaarBanners.js` (new),
+  `public/js/modules/app-bazaar-banners.js` (new), with hooks in `src/database.js`,
+  `src/socketHandlers/index.js`, `public/js/app.js`, `public/app.html`,
+  `public/js/modules/app-channels.js`, `public/js/modules/app-channel-context.js`,
+  `public/js/modules/app-forum.js`, `public/js/modules/app-socket-events.js` and
+  `public/locales/en.json`. Test: `test/bazaarBanners.test.js`.

@@ -21,6 +21,7 @@ const { migrateBazaarDiscordRefs } = require('./bazaarDiscordRefs');
 const { migrateBazaarFerryThreads } = require('./bazaarFerryThreads');
 const { migrateBazaarFerrySync } = require('./bazaarFerrySync');
 const { migrateBazaarStickers } = require('./bazaarStickers');
+const { migrateBazaarBanners } = require('./bazaarBanners');
 const { migrateMessageNsfw } = require('./messageNsfw');
 const { convertPermissionThresholds } = require('./permissionThresholds');
 const { migrateBadges } = require('./badges');
@@ -1320,6 +1321,7 @@ function initDatabase() {
   // (src/bazaarFerrySync.js); needs discord_message_id and ferry_message_map.
   migrateBazaarFerrySync(db);
   migrateBazaarStickers(db); // Bizarre Bazaar fork
+  migrateBazaarBanners(db); // Bizarre Bazaar fork
 
   // ── Migration: discord_channel_id on channels (import deduplication) ─────
   // Stores the originating Discord channel snowflake so a second import of the
