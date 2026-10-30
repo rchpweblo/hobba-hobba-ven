@@ -270,7 +270,7 @@ _openThread(parentId) {
   if (this._channelBlocksPosting?.()) this._applyThreadClosed(false);
 
   // Request thread messages from server
-  this.socket.emit('get-thread-messages', { parentId });
+  this.socket.emit('get-thread-messages', { parentId, paged: true }); // paged: Bizarre Bazaar fork
 
   // Update header
   const msgEl = document.querySelector(`[data-msg-id="${parentId}"]`);

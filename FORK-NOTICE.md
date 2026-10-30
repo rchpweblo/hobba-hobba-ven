@@ -149,3 +149,13 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   Files: `public/js/modules/app-bazaar-voice-bubble.js` (new), with hooks in `public/js/app.js`,
   `public/js/modules/app-channel-unread.js` and `public/locales/en.json`.
   Test: `test/bazaarVoiceBubble.test.js`.
+- **Long threads load in pages.** A thread or forum topic opens on its newest 150 replies, and
+  older ones load 150 at a time from a "Show older replies" button at the top, or by scrolling up
+  to it. Topics copied from Discord run to tens of thousands of replies, and upstream drew them
+  all at once, which froze the desktop app. The server pages only for a client that asks
+  (`paged` or `before` on `get-thread-messages`), so other clients and blog-mode topics still get
+  the whole thread.
+  Files: `public/js/modules/app-bazaar-thread-pages.js` (new), with hooks in
+  `src/socketHandlers/messages.js`, `public/js/app.js`, `public/js/modules/app-socket-events.js`,
+  `public/js/modules/app-threads.js`, `public/js/modules/app-move-to-thread.js` and
+  `public/locales/en.json`. Test: `test/bazaarThreadPages.test.js`.

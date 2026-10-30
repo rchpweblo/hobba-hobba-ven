@@ -44,6 +44,8 @@ _listenFeatureEvents() {
       const preview = document.getElementById('thread-parent-preview');
       if (preview) preview.textContent = this._threadRootPreview(data.parentContent);
     }
+    // Bizarre Bazaar fork: an older page goes above what is showing.
+    if (data.before) { this._bazaarThreadPrepend?.(data); return; }
     const container = document.getElementById('thread-messages');
     if (!container) return;
     container.innerHTML = '';
@@ -55,6 +57,7 @@ _listenFeatureEvents() {
       data.messages.forEach(msg => this._appendThreadMessage(msg));
     }
     this._forumBlogAfterLoad?.();
+    this._bazaarThreadPaged?.(data); // Bizarre Bazaar fork
     this._resetThreadJump?.();
     this._threadJumpToMention?.();
   });

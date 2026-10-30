@@ -8,6 +8,8 @@ const { applyTagsToMessage, applyTagsToFiles, fileTags, messageTags, setMessageT
 const { votesFor, pieceVotesFor } = require('../forumVotes');
 const forumBlog = require('../forumBlog');
 const bazaarForum = require('../bazaarForum');
+// Bizarre Bazaar fork: how many thread replies come per page (get-thread-messages).
+const BAZAAR_THREAD_PAGE = 150;
 const highlights = require('../messageHighlights');
 const quotes = require('../messageQuotes');
 const forumUnread = require('../forumUnread');
@@ -3082,9 +3084,19 @@ module.exports = function register(socket, ctx) {
     // A role gate on the channel covers its threads too (#5597).
     if (!socket.user.isAdmin && !ctx.roleGateAllows(socket.user.id, db.prepare('SELECT id, role_gate FROM channels WHERE id = ?').get(channel.id))) return;
 
+    // Bizarre Bazaar fork: a client that asks (`paged`) gets replies a page
+    // at a time, newest first, and `before` (a reply id) asks for the page
+    // older than it. Topics copied from Discord run to tens of thousands of
+    // replies, and drawing them all at once froze the desktop app. Other
+    // clients, and a blog-mode topic (its post and comments are split from
+    // the full list), still get the whole thread.
+    const blogParts = forumBlog.blogOn(db, channel.id) ? forumBlog.partIdsOf(db, parentId) : null;
+    const paged = !blogParts && (data.paged === true || isInt(data.before));
+    const before = paged && isInt(data.before) ? data.before : null;
+
     // Opening a thread marks every reply in it seen for this account, and the
     // person's other devices drop the unread dot too (#5641).
-    try {
+    if (!before) try {
       db.prepare(`
         INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id)
         VALUES (?, ?, COALESCE((SELECT MAX(id) FROM messages WHERE thread_id = ?), 0))
@@ -3097,13 +3109,29 @@ module.exports = function register(socket, ctx) {
       console.error('Thread read error:', err);
     }
 
-    const messages = db.prepare(`
-      SELECT m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.silent, m.nsfw,
-             COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, COALESCE(m.webhook_avatar, u.avatar) as avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile
-      FROM messages m LEFT JOIN users u ON m.user_id = u.id
-      WHERE m.thread_id = ?
-      ORDER BY m.created_at ASC, m.id ASC
-    `).all(parentId);
+    const threadCols = `m.id, m.content, m.created_at, m.reply_to, m.edited_at, m.is_webhook, m.webhook_username, m.webhook_avatar, m.imported_from, m.is_archived, m.silent, m.nsfw,
+             COALESCE(m.webhook_username, u.display_name, u.username, '[Deleted User]') as username, u.id as user_id, COALESCE(m.webhook_avatar, u.avatar) as avatar, COALESCE(u.avatar_shape, 'circle') as avatar_shape, u.border, u.border_transform, COALESCE(u.animate_profile, 'trigger') as animate_profile`;
+    let messages;
+    let hasMore = false;
+    if (!paged) {
+      messages = db.prepare(`
+        SELECT ${threadCols}
+        FROM messages m LEFT JOIN users u ON m.user_id = u.id
+        WHERE m.thread_id = ?
+        ORDER BY m.created_at ASC, m.id ASC
+      `).all(parentId);
+    } else {
+      const page = db.prepare(`
+        SELECT ${threadCols}
+        FROM messages m LEFT JOIN users u ON m.user_id = u.id
+        WHERE m.thread_id = ?
+          AND (? IS NULL OR (m.created_at, m.id) < (SELECT created_at, id FROM messages WHERE id = ? AND thread_id = ?))
+        ORDER BY m.created_at DESC, m.id DESC
+        LIMIT ?
+      `).all(parentId, before, before, parentId, BAZAAR_THREAD_PAGE + 1);
+      hasMore = page.length > BAZAAR_THREAD_PAGE;
+      messages = page.slice(0, BAZAAR_THREAD_PAGE).reverse();
+    }
 
     // Enrich with reactions and reply context
     const msgIds = messages.map(m => m.id);
@@ -3144,9 +3172,6 @@ module.exports = function register(socket, ctx) {
         if (!arr.includes(r.name)) arr.push(r.name);
       });
     }
-
-    // Blog mode (#5742): which replies are the author's additions to the post.
-    const blogParts = forumBlog.blogOn(db, channel.id) ? forumBlog.partIdsOf(db, parentId) : null;
 
     const enriched = messages.map(m => {
       const obj = { ...m };
@@ -3195,7 +3220,10 @@ module.exports = function register(socket, ctx) {
       parentAvatar: parent.avatar || null,
       parentAvatarShape: parent.avatar_shape || 'circle',
       parentCreatedAt: utcStamp(parent.created_at),
-      messages: enriched
+      messages: enriched,
+      // Bizarre Bazaar fork: paging (see above).
+      before,
+      hasMore
     });
   });
 

@@ -5034,5 +5034,9 @@
   "bazaar_voice_bubble": {
     "title": "In voice",
     "channels": "{{count}} voice channels"
+  },
+  "bazaar_thread_pages": {
+    "older": "Show older replies",
+    "loading": "Loading older replies…"
   }
 }

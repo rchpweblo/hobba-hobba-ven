@@ -286,7 +286,7 @@ _onMessagesThreaded(data) {
   const open = !!panel && panel.style.display !== 'none';
   const active = Number(this._activeThreadParent);
   if (open && active) {
-    if (active === parentId) this.socket.emit('get-thread-messages', { parentId });
+    if (active === parentId) this.socket.emit('get-thread-messages', { parentId, paged: true }); // paged: Bizarre Bazaar fork
     else if (absorbed.includes(active)) this._openThread(parentId);
   }
   // Those are no longer threads, so no markers of their own.
