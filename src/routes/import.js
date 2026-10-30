@@ -13,6 +13,7 @@ const { sanitizeText } = require('../socketHandlers/helpers');
 const { unescapeDiscord, forwardedMessage, quoteForwarded } = require('../discordText');
 const { copyAttachments } = require('../importFiles');
 const bazaarStickers = require('../bazaarStickers'); // Bizarre Bazaar fork
+const bazaarFerrySync = require('../bazaarFerrySync'); // Bizarre Bazaar fork
 
 module.exports = function registerImport(deps) {
   const { uploadDiskGuard, app, verifyAdminFromDb, uploadLimiter, importUpload } = deps;
@@ -631,6 +632,9 @@ module.exports = function registerImport(deps) {
         if (msg.isPinned && !threadId) {
           try {
             insertPin.run(result.lastInsertRowid, channelId, user.id);
+            // Bizarre Bazaar fork: pinned on Discord already, so not sent back.
+            bazaarFerrySync.seePin(db, result.lastInsertRowid, true);
+            bazaarFerrySync.forgetPins(db, result.lastInsertRowid);
           } catch (err) {
             // Do not abort the import over one pin, but do not lose it silently either.
             console.warn('[import] Could not pin an imported message:', err.message);

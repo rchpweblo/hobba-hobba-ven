@@ -328,6 +328,57 @@ test('edits and deletes cross both ways', async (t) => {
     assert.ok(!String(out.body.content || '').includes('file not found'));
   });
 
+  await t.test('pins cross both ways', async () => {
+    setMode('on');
+    // Discord pins a relayed message: Haven follows, and sends nothing back.
+    const MID = discord.newId();
+    discord.messages.set(MID, TEXT_ID);
+    discord.dispatch('MESSAGE_CREATE', discordMessage(MID, TEXT_ID, 'pin me on discord'));
+    const row = await until(() => db.prepare('SELECT id FROM messages WHERE discord_message_id = ?').get(MID));
+    const callsBefore = discord.pinCalls.length;
+    const announced = next(A, 'message-pinned', (d) => d && d.messageId === row.id, 8000);
+    discord.pins.set(TEXT_ID, [MID]);
+    discord.dispatch('CHANNEL_PINS_UPDATE', { guild_id: GUILD_ID, channel_id: TEXT_ID });
+    assert.ok(await until(() => db.prepare('SELECT 1 FROM pinned_messages WHERE message_id = ?').get(row.id)), 'pinned in Haven');
+    assert.strictEqual((await announced).pinnedBy, 'Discord');
+    await wait(4000);
+    assert.strictEqual(discord.pinCalls.length, callsBefore, 'not echoed back to Discord');
+
+    // Discord unpins it: so does Haven.
+    discord.pins.set(TEXT_ID, []);
+    discord.dispatch('CHANNEL_PINS_UPDATE', { guild_id: GUILD_ID, channel_id: TEXT_ID });
+    assert.ok(await until(() => !db.prepare('SELECT 1 FROM pinned_messages WHERE message_id = ?').get(row.id)), 'unpinned in Haven');
+
+    // Haven pins it while the bot may not: it stays pinned in Haven, and
+    // Discord's list (without it) does not undo it.
+    A.emit('pin-message', { messageId: row.id });
+    assert.ok(await until(() => discord.pinCalls.slice(callsBefore).find((c) => c.status === 403), 8000), 'tried, refused');
+    discord.dispatch('CHANNEL_PINS_UPDATE', { guild_id: GUILD_ID, channel_id: TEXT_ID });
+    await wait(2500);
+    assert.ok(db.prepare('SELECT 1 FROM pinned_messages WHERE message_id = ?').get(row.id), 'still pinned in Haven');
+
+    // With Pin Messages, Haven's unpin and pin reach Discord.
+    discord.perms.pinMessages = true;
+    A.emit('unpin-message', { messageId: row.id });
+    assert.ok(await until(() => discord.pinCalls.find((c) => c.method === 'DELETE' && c.messageId === MID && c.status === 204), 8000), 'unpinned on Discord');
+    A.emit('pin-message', { messageId: row.id });
+    assert.ok(await until(() => discord.pinCalls.find((c) => c.method === 'PUT' && c.messageId === MID && c.status === 204), 8000), 'pinned on Discord');
+    assert.deepStrictEqual(discord.pins.get(TEXT_ID), [MID]);
+
+    // A reply in a thread: pinned in its topic's own list.
+    const THREAD = discord.newId();
+    const root = Number(db.prepare("INSERT INTO messages (channel_id, user_id, content, discord_message_id) VALUES (?, NULL, 'thread start', ?)").run(talkId, THREAD).lastInsertRowid);
+    const DX = discord.newId();
+    const reply = Number(db.prepare("INSERT INTO messages (channel_id, user_id, content, thread_id, discord_message_id) VALUES (?, NULL, 'a reply on discord', ?, ?)").run(talkId, root, DX).lastInsertRowid);
+    const topicPin = next(A, 'bazaar:thread-pin', (d) => d && d.messageId === reply && d.pinned, 8000);
+    discord.pins.set(THREAD, [DX, THREAD]);
+    discord.dispatch('CHANNEL_PINS_UPDATE', { guild_id: GUILD_ID, channel_id: THREAD });
+    const ev = await topicPin;
+    assert.ok(ev && ev.threadId === root && ev.count === 1, "in the topic's list");
+    assert.ok(!db.prepare('SELECT 1 FROM pinned_messages WHERE message_id = ?').get(root), "the thread's first message is not made a pinned topic");
+    discord.perms.pinMessages = false;
+  });
+
   await t.test('deleting a whole channel deletes nothing on Discord', async () => {
     const before = discord.deletions.length;
     const MID = discord.newId();

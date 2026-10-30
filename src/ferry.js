@@ -604,6 +604,10 @@ function handleDispatch(type, d) {
       bazaarDeleteFromDiscord((d && d.ids) || []);
       break;
 
+    case 'CHANNEL_PINS_UPDATE': // Bizarre Bazaar fork: pins cross both ways
+      if (d && d.channel_id) bazaarPinsChanged(String(d.channel_id));
+      break;
+
     case 'THREAD_CREATE':
       cacheThread(d);
       takePendingStarter(d && d.id);
@@ -615,6 +619,7 @@ function handleDispatch(type, d) {
       const before = d && d.id ? threads.get(String(d.id)) || null : null;
       cacheThread(d);
       relayThreadUpdateToHaven(d, before);
+      bazaarTopicPinFromDiscord(d); // Bizarre Bazaar fork
       break;
     }
 
@@ -2325,7 +2330,125 @@ function bazaarSendRow(row) {
   const link = bazaarFerrySync.outboundLinks(deps.db, row.channel_id)[0];
   // Not paired any more, or never was.
   if (!link) return null;
+  if (row.kind === 'pin' || row.kind === 'unpin') return bazaarPinOnDiscord(row, link);
   return row.kind === 'delete' ? bazaarDeleteOnDiscord(row, link) : bazaarEditOnDiscord(row, link);
+}
+
+// ── Bizarre Bazaar fork: pins both ways (src/bazaarFerrySync.js) ───────────
+// Discord pins with its own Pin Messages permission; without it a Haven pin
+// stays in Haven only, and the log says so once.
+const BAZAAR_FORUM_PINNED = 2; // a forum post's flag: pinned at the top of the forum
+let bazaarPinRefusedLogged = false;
+
+async function bazaarPinOnDiscord(row, link) {
+  const msg = deps.db.prepare(`SELECT m.id, m.thread_id, c.is_forum FROM messages m JOIN channels c ON c.id = m.channel_id WHERE m.id = ?`).get(row.haven_message_id);
+  if (!msg) return; // deleted since: its own row deletes it on Discord
+  const pin = row.kind === 'pin';
+  try {
+    // A forum topic pinned in Haven is its Discord post pinned in the forum.
+    if (!msg.thread_id && msg.is_forum) {
+      for (const threadId of bazaarFerrySync.threadsToDelete(deps.db, { haven_message_id: msg.id, discord_message_id: row.discord_message_id })) {
+        const ch = await discordRequest('GET', `/channels/${threadId}`).catch(() => null);
+        if (!ch || ch.type !== 11) continue;
+        const flags = Number(ch.flags) || 0;
+        await discordRequest('PATCH', `/channels/${threadId}`, { flags: pin ? flags | BAZAAR_FORUM_PINNED : flags & ~BAZAAR_FORUM_PINNED });
+        bazaarFerrySync.seePin(deps.db, msg.id, pin);
+        return;
+      }
+      return;
+    }
+    for (const copy of bazaarFerrySync.discordCopies(deps.db, row, link)) {
+      for (const channelId of copy.channels) {
+        try {
+          await discordRequest(pin ? 'PUT' : 'DELETE', `/channels/${channelId}/messages/pins/${copy.messageId}`);
+          bazaarFerrySync.seePin(deps.db, msg.id, pin);
+          return;
+        } catch (err) {
+          if (BAZAAR_NOT_THERE.has(err.discordCode) || err.status === 404) continue;
+          throw err;
+        }
+      }
+    }
+  } catch (err) {
+    if (err.status === 403) {
+      if (!bazaarPinRefusedLogged) {
+        bazaarPinRefusedLogged = true;
+        console.warn('[ferry] Discord refused a pin: give the bot the Pin Messages permission. Haven pins stay in Haven until then.');
+      }
+      return;
+    }
+    throw err;
+  }
+}
+
+// Discord says only that a channel's pins changed; its list is read and
+// Haven made to match. Several changes in a row are read once.
+const bazaarPinTimers = new Map();
+function bazaarPinsChanged(discordChannelId) {
+  clearTimeout(bazaarPinTimers.get(discordChannelId));
+  bazaarPinTimers.set(discordChannelId, setTimeout(() => {
+    bazaarPinTimers.delete(discordChannelId);
+    bazaarSyncPinsFrom(discordChannelId).catch(err => console.warn('[ferry] Could not read pins from Discord:', err.message));
+  }, 1500));
+}
+
+function bazaarPinner() {
+  return deps.db.prepare('SELECT id FROM users WHERE is_admin = 1 ORDER BY id LIMIT 1').get()?.id || null;
+}
+
+async function bazaarDiscordPins(discordChannelId) {
+  const ids = [];
+  let before = null;
+  for (let page = 0; page < 10; page++) {
+    const j = await discordRequest('GET', `/channels/${discordChannelId}/messages/pins?limit=50${before ? '&before=' + encodeURIComponent(before) : ''}`);
+    const items = (j && j.items) || [];
+    for (const it of items) if (it && it.message && it.message.id) ids.push(String(it.message.id));
+    if (!j || !j.has_more || !items.length) break;
+    before = items[items.length - 1].pinned_at;
+  }
+  return ids;
+}
+
+async function bazaarSyncPinsFrom(discordChannelId) {
+  const db = deps && deps.db;
+  if (!db) return null;
+  const scope = bazaarFerrySync.pinScope(db, discordChannelId);
+  const pinner = bazaarPinner();
+  if (!scope || !pinner) return null;
+  const ids = await bazaarDiscordPins(discordChannelId);
+  const result = bazaarFerrySync.reconcilePins(db, scope, ids, pinner);
+  bazaarAnnouncePins(scope, result);
+  return result;
+}
+
+// Open screens follow: a reply's pin as release 16's topic pins, a channel's
+// as upstream's.
+function bazaarAnnouncePins(scope, { added, removed }) {
+  const code = deps.db.prepare('SELECT code FROM channels WHERE id = ?').get(scope.channelId)?.code;
+  if (!code || (!added.length && !removed.length)) return;
+  const room = deps.io.to(`channel:${code}`);
+  if (scope.rootId) {
+    const count = deps.db.prepare('SELECT COUNT(*) AS n FROM pinned_messages p JOIN messages m ON m.id = p.message_id WHERE m.thread_id = ?').get(scope.rootId).n;
+    for (const m of added) room.emit('bazaar:thread-pin', { channelCode: code, threadId: scope.rootId, messageId: m.id, pinned: true, pinnedBy: 'Discord', count });
+    for (const m of removed) room.emit('bazaar:thread-pin', { channelCode: code, threadId: scope.rootId, messageId: m.id, pinned: false, count });
+  } else {
+    for (const m of added) room.emit('message-pinned', { channelCode: code, messageId: m.id, pinnedBy: 'Discord' });
+    for (const m of removed) room.emit('message-unpinned', { channelCode: code, messageId: m.id });
+  }
+}
+
+// A forum post pinned or unpinned at the top of its forum on Discord.
+function bazaarTopicPinFromDiscord(d) {
+  try {
+    if (!d || !d.id || d.flags === undefined) return;
+    const pinner = bazaarPinner();
+    if (!pinner) return;
+    const res = bazaarFerrySync.pinTopic(deps.db, String(d.id), !!((Number(d.flags) || 0) & BAZAAR_FORUM_PINNED), pinner);
+    if (!res) return;
+    bazaarAnnouncePins({ channelId: res.channelId, rootId: null }, res.change === 'added' ? { added: [{ id: res.rootId }], removed: [] } : { added: [], removed: [{ id: res.rootId }] });
+  } catch (err) {
+    console.warn('[ferry] Could not follow a forum post pin:', err.message);
+  }
 }
 
 const BAZAAR_NOT_THERE = new Set([10003, 10008, 50001]);   // unknown channel, unknown message, no access

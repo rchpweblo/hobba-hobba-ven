@@ -43,7 +43,10 @@ function startFakeDiscord(port) {
   const deletions = [];            // { channelId, messageId, status }
   const threadDeletions = [];      // thread ids deleted
   const edits = [];                // { webhookId, messageId, threadId, body }
-  const perms = { manageThreads: false };
+  const perms = { manageThreads: false, pinMessages: false };
+  const pins = new Map();          // channel id -> pinned message ids, newest first
+  const pinCalls = [];             // { method, channelId, messageId, status }
+  const channelPatches = [];       // { channelId, body }
   let seq = 0;
   let identified = 0;
 
@@ -153,6 +156,30 @@ function startFakeDiscord(port) {
         threadsMade.push(thread);
         return json(res, 201, thread);
       }
+      // Bizarre Bazaar fork: pins, and a forum post's pinned flag.
+      if (parts[0] === 'channels' && parts[2] === 'messages' && parts[3] === 'pins') {
+        if (req.method === 'GET' && parts.length === 4) {
+          const items = (pins.get(parts[1]) || []).map((id, i) => ({ pinned_at: new Date(Date.now() - i * 1000).toISOString(), message: { id, channel_id: parts[1] } }));
+          return json(res, 200, { items, has_more: false });
+        }
+        if ((req.method === 'PUT' || req.method === 'DELETE') && parts.length === 5) {
+          const status = !perms.pinMessages ? 403 : messages.get(parts[4]) !== parts[1] ? 404 : 204;
+          pinCalls.push({ method: req.method, channelId: parts[1], messageId: parts[4], status });
+          if (status === 403) return json(res, 403, { message: 'Missing Permissions', code: 50013 });
+          if (status === 404) return json(res, 404, { message: 'Unknown Message', code: 10008 });
+          const list = (pins.get(parts[1]) || []).filter((id) => id !== parts[4]);
+          if (req.method === 'PUT') list.unshift(parts[4]);
+          pins.set(parts[1], list);
+          res.writeHead(204); return res.end();
+        }
+      }
+      if (req.method === 'PATCH' && parts[0] === 'channels' && parts.length === 2) {
+        const thread = threads.get(parts[1]);
+        if (!thread) return json(res, 404, { message: 'Unknown Channel', code: 10003 });
+        channelPatches.push({ channelId: parts[1], body });
+        if (body && body.flags !== undefined) thread.flags = body.flags;
+        return json(res, 200, thread);
+      }
       if (req.method === 'GET' && parts[0] === 'channels' && parts.length === 2) {
         const thread = threads.get(parts[1]);
         return thread ? json(res, 200, thread) : json(res, 404, { message: 'Unknown Channel', code: 10003 });
@@ -244,6 +271,9 @@ function startFakeDiscord(port) {
       threadDeletions,
       edits,
       perms,
+      pins,
+      pinCalls,
+      channelPatches,
       newId,
       get identified() { return identified; },
       get connections() { return sockets.size; },

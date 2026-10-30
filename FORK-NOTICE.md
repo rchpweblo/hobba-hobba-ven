@@ -235,3 +235,15 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   `public/css/style.css`, `public/css/style-media-grid.css`,
   `public/css/style-profile-servers-modals.css`, `public/locales/en.json`.
   Test: `test/bazaarThreadPages.test.js`.
+
+- **Pins cross Ferry both ways.** A message pinned or unpinned on Discord is pinned or unpinned
+  in Haven, in a channel, a forum post or a thread (Discord says only that a channel's pins
+  changed, so Ferry reads its whole list and makes Haven match). A forum post pinned at the top
+  of its Discord forum is a pinned topic in Haven. A Haven pin or unpin goes out through the
+  edit/delete outbox (`bazaar_ferry_outbox`, kinds `pin` and `unpin`), so it waits, pauses and
+  retries as they do; Discord needs the bot to hold Pin Messages, and without it the pin stays
+  in Haven and the log says so once. A Haven pin is taken away by Discord's list only once it is
+  known to have been on Discord (`bazaar_pin_seen`), so a pin Discord never had is never undone
+  by it, and pins the history importer copies are not sent back.
+  Files: `src/bazaarFerrySync.js`, `src/ferry.js`, `src/routes/import.js`.
+  Tests: `test/bazaarFerrySync.test.js`, `test/fakeDiscord.js`.
