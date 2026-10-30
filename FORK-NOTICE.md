@@ -107,3 +107,22 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   `src/socketHandlers/bazaarRoleBot.js`, `public/js/app.js`,
   `public/js/modules/app-bazaar-role-bot.js`, `public/js/modules/app-message-content.js` and
   `public/locales/en.json`. Test: `test/bazaarDiscordRefs.test.js`.
+
+**2026-10-29, based on Haven v4.27.0**
+
+- **Ferry carries threads that are sub-channels.** A Discord thread imported into a sub-channel
+  of its own (see above) stays joined to it once the sub-channel's parent is paired: the thread's
+  new messages come into the sub-channel as chat lines, and messages written in the sub-channel
+  go into the thread through the parent pairing's webhook. Upstream Ferry pairs channels only,
+  so these messages became a Haven thread in the parent and nothing went back.
+  Files: `src/bazaarFerryThreads.js` (new), with hooks in `src/ferry.js` and
+  `src/socketHandlers/index.js`. Test: `test/bazaarFerryThreads.test.js`.
+- **Relayed thread replies keep their Discord id.** A reply Ferry brings into a Haven thread or
+  forum topic now stores the Discord message id, as a relayed chat line already did, so
+  importing the same history later skips it instead of adding it twice.
+  Files: `server.js`, `src/ferry.js`. Test: `test/bazaarFerryThreads.test.js`.
+- **Catching up an imported channel.** A channel picked for a Discord import may carry `after`,
+  a Discord message id, and only the messages after it are read. Writing a catch-up of a forum
+  post already in Haven keeps its first new reply as a reply; upstream took the earliest
+  message read for the post's opening message.
+  File: `src/routes/import.js`. Test: `test/bazaarCatchUp.test.js`.

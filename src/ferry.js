@@ -43,6 +43,7 @@ const { stripRoleMentions } = require('./socketHandlers/helpers');
 const { accessContext, channelAccess, bits } = require('./discordPermissions');
 const { unescapeDiscord, forwardedMessage, quoteForwarded } = require('./discordText');
 const ferryReplies = require('./ferryReplies');
+const bazaarFerryThreads = require('./bazaarFerryThreads');
 
 /**
  * The tests run Ferry against a stand-in Discord on this machine, set through
@@ -745,6 +746,9 @@ function relayToHaven(msg) {
     // notice, pin notice, boost notice and so on, which is noise in Haven.
     if (msg.type !== undefined && msg.type !== 0 && msg.type !== 19) return;
 
+    // Bizarre Bazaar fork: a thread that is a Haven sub-channel of its own.
+    if (relayToThreadChannel(msg)) return;
+
     // Posts and replies in a paired Discord forum take their own route,
     // because they become topics and thread replies rather than chat lines.
     if (relayForumMessage(msg)) return;
@@ -797,6 +801,32 @@ function relayToHaven(msg) {
   } catch (err) {
     console.error('Ferry inbound relay error:', err.message);
   }
+}
+
+// Bizarre Bazaar fork (src/bazaarFerryThreads.js): a message in a Discord
+// thread imported into a sub-channel of its own goes into that sub-channel as
+// a chat line, while the sub-channel's parent is paired. Returns true when the
+// thread is such a sub-channel.
+function relayToThreadChannel(msg) {
+  const ch = bazaarFerryThreads.inboundChannel(deps.db, msg.channel_id);
+  if (!ch) return false;
+  const content = buildHavenContent(msg);
+  if (!content) return true;
+  const answers = msg.type === 19 && msg.message_reference ? msg.message_reference.message_id : null;
+  const havenId = deps.insertHavenMessage({
+    channelId: ch.id,
+    channelCode: ch.code,
+    username: discordAuthorName(msg),
+    avatarUrl: discordAvatarUrl(msg.author),
+    content,
+    discordMessageId: msg.id,
+    replyTo: answers ? ferryReplies.havenIdFor(deps.db, ch.id, answers) : null,
+  });
+  if (havenId) {
+    ferryReplies.recordPair(deps.db, { havenMessageId: havenId, discordMessageId: msg.id, discordChannelId: msg.channel_id, discordAuthorId: msg.author && msg.author.id });
+    rememberRelay(msg.id, content, [{ havenMessageId: havenId, channelCode: ch.code }]);
+  }
+  return true;
 }
 
 function rememberRelay(discordMessageId, content, targets) {
@@ -912,7 +942,7 @@ function relayForumMessage(msg) {
     for (const r of live) {
       const id = deps.insertHavenThreadReply({
         channelId: r.channel_id, channelCode: r.channel_code, parentId: r.topic_message_id,
-        username, avatarUrl, content,
+        username, avatarUrl, content, discordMessageId: msg.id,
       });
       if (id) targets.push({ havenMessageId: id, channelCode: r.channel_code });
       touchLink(r.link_id, null);
@@ -965,6 +995,7 @@ function relayChatThreadReply(msg, thread) {
     if (!parentId) continue;
     const id = deps.insertHavenThreadReply({
       channelId: link.channel_id, channelCode: link.channel_code, parentId, username, avatarUrl, content,
+      discordMessageId: msg.id,
     });
     if (id) targets.push({ havenMessageId: id, channelCode: link.channel_code });
     touchLink(link.id, null);
@@ -1793,19 +1824,22 @@ async function ensureLinkWebhook(link) {
 /**
  * Relays one Haven message to one paired Discord channel, as the Haven author.
  */
-async function sendToDiscord(link, { username, avatar, content, sender, havenMessageId = null, replyTo = null }) {
+// Bizarre Bazaar fork: `threadId` sends into one thread of the paired channel,
+// for a sub-channel made from that thread (src/bazaarFerryThreads.js).
+async function sendToDiscord(link, { username, avatar, content, sender, havenMessageId = null, replyTo = null, threadId = null }) {
   const guild = guilds.get(String(link.guild_id || ''));
   const { text, files } = await takeUploads(content, sender);
-  const body = outboundBody(ferryReplies.replyLine(deps.db, { replyToHavenId: replyTo, link, guildId: link.guild_id }) + text, guild);
+  const where = threadId ? { ...link, discord_channel_id: String(threadId) } : link;
+  const body = outboundBody(ferryReplies.replyLine(deps.db, { replyToHavenId: replyTo, link: where, guildId: link.guild_id }) + text, guild);
   if (!body.trim() && !files.length) return;
   if (isForumType(link.discord_channel_type)) { touchLink(link.id, KIND_MISMATCH); return; }
 
   return enqueue(`ch:${link.discord_channel_id}`, async () => {
     try {
       const hook = await ensureLinkWebhook(link);
-      const sent = await executeWebhook(hook.id, hook.token, await webhookPayload(link, guild, { username, avatar, body }), { files });
+      const sent = await executeWebhook(hook.id, hook.token, await webhookPayload(link, guild, { username, avatar, body }), { files, threadId });
       if (havenMessageId && sent && sent.id) {
-        ferryReplies.recordPair(deps.db, { havenMessageId, discordMessageId: sent.id, discordChannelId: link.discord_channel_id });
+        ferryReplies.recordPair(deps.db, { havenMessageId, discordMessageId: sent.id, discordChannelId: where.discord_channel_id });
       }
       touchLink(link.id, null);
     } catch (err) {

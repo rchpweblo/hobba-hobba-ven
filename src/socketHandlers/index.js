@@ -49,6 +49,7 @@ const { ipBanRefusal } = require('../ipBanGuard');
 const { createActivity } = require('../activity');
 const createDmCalls = require('../dmCalls');
 const ferry = require('../ferry');
+const bazaarFerryThreads = require('../bazaarFerryThreads');
 
 const registerChannels   = require('./channels');
 const registerMessages   = require('./messages');
@@ -1830,7 +1831,14 @@ function setupSocketHandlers(io, db, opts = {}) {
     const cfg = ferry.getConfig();
     if (!cfg.enabled || !cfg.token) return;
 
-    const links = ferryLinksFor(channelId);
+    let links = ferryLinksFor(channelId);
+    // Bizarre Bazaar fork: a sub-channel made from a Discord thread sends into
+    // that thread, through its parent's pairing (src/bazaarFerryThreads.js).
+    let threadId = null;
+    if (!links.length && !topic) {
+      const viaParent = bazaarFerryThreads.outboundTarget(db, channelId);
+      if (viaParent) ({ links, threadId } = viaParent);
+    }
     if (!links.length) return;
 
     if (!user.isAdmin && !userHasPermission(user.id, 'use_ferry', channelId)) {
@@ -1886,7 +1894,7 @@ function setupSocketHandlers(io, db, opts = {}) {
       // send functions refuse a pairing of mismatched kinds and say so on it.
       const send = topic
         ? ferry.sendTopicToDiscord(link, { ...identity, content: body, sender, title: topic.title, tags: topic.tags, topicId: topic.id })
-        : ferry.sendToDiscord(link, { ...identity, content: body, sender, havenMessageId, replyTo });
+        : ferry.sendToDiscord(link, { ...identity, content: body, sender, havenMessageId, replyTo, threadId });
       Promise.resolve(send).catch(err => notify(`Discord relay failed: ${err.message}`));
     }
   }

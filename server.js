@@ -3341,11 +3341,18 @@ initFerry({
     });
   },
 
-  insertHavenThreadReply: ({ channelId, channelCode, parentId, username, avatarUrl, content }) => {
+  insertHavenThreadReply: ({ channelId, channelCode, parentId, username, avatarUrl, content, discordMessageId = null }) => {
+    // Bizarre Bazaar fork: the Discord id is kept here too, as on a chat line
+    // (#5773), so importing the same history later skips the reply.
+    const discordId = /^\d{5,25}$/.test(String(discordMessageId || '')) ? String(discordMessageId) : null;
+    if (discordId) {
+      const already = db.prepare('SELECT id FROM messages WHERE channel_id = ? AND discord_message_id = ?').get(channelId, discordId);
+      if (already) return already.id;
+    }
     try {
       const result = db.prepare(
-        'INSERT INTO messages (channel_id, user_id, content, thread_id, is_webhook, webhook_username, webhook_avatar) VALUES (?, ?, ?, ?, 1, ?, ?)'
-      ).run(channelId, null, content, parentId, username, avatarUrl || null);
+        'INSERT INTO messages (channel_id, user_id, content, thread_id, is_webhook, webhook_username, webhook_avatar, discord_message_id) VALUES (?, ?, ?, ?, 1, ?, ?, ?)'
+      ).run(channelId, null, content, parentId, username, avatarUrl || null, discordId);
       const createdAt = new Date().toISOString();
 
       io.to(`channel:${channelCode}`).emit('new-thread-message', {

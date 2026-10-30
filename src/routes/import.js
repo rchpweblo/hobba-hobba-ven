@@ -356,6 +356,9 @@ module.exports = function registerImport(deps) {
       const ch = selected[idx];
       const messages = [];
       let before = null, batch;
+      // Bizarre Bazaar fork: `after` (a Discord message id) reads only what
+      // came after it, oldest first, to catch up a channel imported before.
+      let after = typeof ch.after === 'string' && DISCORD_ID.test(ch.after) ? ch.after : null;
       // What the entry is (#5772): a thread goes into its parent channel, and
       // a forum becomes a Haven forum whose posts are its topics.
       const kind = ['text', 'announcement', 'forum', 'media', 'thread'].includes(ch.kind) ? ch.kind : 'text';
@@ -373,7 +376,8 @@ module.exports = function registerImport(deps) {
       try {
         if (!isForum) do {
           let ep = `/channels/${ch.id}/messages?limit=100`;
-          if (before) ep += `&before=${before}`;
+          if (after) ep += `&after=${after}`;
+          else if (before) ep += `&before=${before}`;
           batch = await discordApiFetch(ep, auth);
           job.messages += batch.length;
           job.updatedAt = Date.now();
@@ -423,7 +427,10 @@ module.exports = function registerImport(deps) {
             });
           }
 
-          if (batch.length > 0) before = batch[batch.length - 1].id;
+          // Paging forward goes on from the newest id seen, whatever order
+          // Discord listed the page in.
+          if (batch.length > 0 && after) after = batch.reduce((m, x) => (BigInt(x.id) > BigInt(m) ? x.id : m), after);
+          else if (batch.length > 0) before = batch[batch.length - 1].id;
           await new Promise(r => setTimeout(r, 300)); // respect rate limits
         } while (batch.length === 100);
       } catch (err) {
@@ -671,7 +678,10 @@ module.exports = function registerImport(deps) {
         let root = lookupByDiscordId.get(parent.id, threadDiscordId);
         let replies = messages;
         if (parent.is_forum) {
-          const starter = messages.find(m => m.discordId === threadDiscordId) || byTime(messages)[0];
+          // Bizarre Bazaar fork: when the topic is already in Haven, only its
+          // own first message is the starter. A catch-up read (`after`) does
+          // not include it, and its first new reply must stay a reply.
+          const starter = messages.find(m => m.discordId === threadDiscordId) || (root ? null : byTime(messages)[0]);
           if (!root) {
             if (!starter) return;
             await copyFilesOf(parent.id, [starter]);
