@@ -15,7 +15,7 @@ const os = require('node:os');
 const { spawn } = require('node:child_process');
 const { io } = require('socket.io-client');
 const Database = require('better-sqlite3');
-const { startFakeDiscord, GUILD_ID, TEXT_ID } = require('./fakeDiscord');
+const { startFakeDiscord, GUILD_ID, TEXT_ID, FORUM_ID } = require('./fakeDiscord');
 
 const PORT = 3431;
 const DISCORD_PORT = 3432;
@@ -377,6 +377,64 @@ test('edits and deletes cross both ways', async (t) => {
     assert.ok(ev && ev.threadId === root && ev.count === 1, "in the topic's list");
     assert.ok(!db.prepare('SELECT 1 FROM pinned_messages WHERE message_id = ?').get(root), "the thread's first message is not made a pinned topic");
     discord.perms.pinMessages = false;
+  });
+
+  await t.test("a forum post pinned on either side is a pinned topic on the other, one at a time on Discord", async () => {
+    setMode('on');
+    const made = next(A, 'channels-list', (chs) => Array.isArray(chs) && chs.some((c) => c.name === 'board'));
+    A.emit('create-channel', { name: 'board', isForum: true });
+    const board = (await made).find((c) => c.name === 'board');
+    const paired = next(A, 'ferry:config', (c) => c.links.length === 2);
+    A.emit('ferry:create-link', { channelCode: board.code, guildId: GUILD_ID, discordChannelId: FORUM_ID, direction: 'both', outMode: 'all' });
+    assert.ok(await paired, 'forum paired');
+    const boardId = db.prepare('SELECT id FROM channels WHERE code = ?').get(board.code).id;
+    A.emit('enter-channel', { code: board.code }); // a pin goes where you are
+    await wait(200);
+    const post = (title) => {
+      const T = discord.newId();
+      const id = Number(db.prepare("INSERT INTO messages (channel_id, user_id, content, title, imported_from, discord_message_id, webhook_username) VALUES (?, NULL, ?, ?, 'discord', ?, 'Alice')")
+        .run(boardId, title, title, T).lastInsertRowid);
+      db.prepare('INSERT INTO ferry_forum_threads (topic_message_id, channel_id, guild_id, discord_forum_id, discord_thread_id) VALUES (?, ?, ?, ?, ?)').run(id, boardId, GUILD_ID, FORUM_ID, T);
+      discord.threads.set(T, { id: T, type: 11, parent_id: FORUM_ID, guild_id: GUILD_ID, name: title, flags: 0 });
+      return { T, id };
+    };
+    const p1 = post('first post');
+    const p2 = post('second post');
+    const isPinned = (id) => !!db.prepare('SELECT 1 FROM pinned_messages WHERE message_id = ?').get(id);
+    const flag = (T, flags) => { discord.threads.get(T).flags = flags; discord.dispatch('THREAD_UPDATE', { ...discord.threads.get(T) }); };
+
+    // Discord pins the first post at the top of the forum.
+    flag(p1.T, 2);
+    assert.ok(await until(() => isPinned(p1.id)), 'a pinned topic in Haven');
+
+    // Haven pins the second while the first is pinned on Discord: Discord
+    // pins one post, so the second stays pinned in Haven only.
+    const patches = discord.channelPatches.length;
+    A.emit('pin-message', { messageId: p2.id });
+    assert.ok(await until(() => isPinned(p2.id)), 'pinned in Haven');
+    await wait(4000);
+    assert.strictEqual(discord.channelPatches.length, patches, 'the first keeps its place on Discord');
+    assert.ok(isPinned(p1.id));
+
+    // Discord unpins the first: so does Haven.
+    flag(p1.T, 0);
+    assert.ok(await until(() => !isPinned(p1.id)), 'unpinned in Haven');
+
+    // Unpinned and pinned again in Haven, with nothing pinned on Discord: it goes.
+    A.emit('unpin-message', { messageId: p2.id });
+    assert.ok(await until(() => !isPinned(p2.id)));
+    A.emit('pin-message', { messageId: p2.id });
+    assert.ok(await until(() => discord.channelPatches.find((c) => c.channelId === p2.T && c.body && c.body.flags === 2), 8000), 'pinned on Discord');
+    // Discord's echo, and a later rename, change nothing.
+    flag(p2.T, 2);
+    await wait(600);
+    discord.threads.get(p2.T).name = 'second post, renamed';
+    flag(p2.T, 2);
+    await wait(600);
+    assert.ok(isPinned(p2.id), 'still pinned');
+    assert.strictEqual(db.prepare("SELECT COUNT(*) AS n FROM bazaar_ferry_outbox WHERE kind IN ('pin', 'unpin')").get().n, 0, 'nothing waiting');
+    A.emit('enter-channel', { code: talk.code });
+    await wait(200);
   });
 
   await t.test('deleting a whole channel deletes nothing on Discord', async () => {

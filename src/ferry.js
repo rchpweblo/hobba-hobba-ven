@@ -619,7 +619,7 @@ function handleDispatch(type, d) {
       const before = d && d.id ? threads.get(String(d.id)) || null : null;
       cacheThread(d);
       relayThreadUpdateToHaven(d, before);
-      bazaarTopicPinFromDiscord(d); // Bizarre Bazaar fork
+      bazaarTopicPinFromDiscord(d, before); // Bizarre Bazaar fork
       break;
     }
 
@@ -683,6 +683,7 @@ function cacheThread(t) {
     name: String(t.name || ''),
     appliedTags: Array.isArray(t.applied_tags) ? t.applied_tags.map(String) : [],
     locked: !!(t.thread_metadata && t.thread_metadata.locked),
+    pinned: !!((Number(t.flags) || 0) & BAZAAR_FORUM_PINNED), // Bizarre Bazaar fork
   });
 }
 
@@ -2351,6 +2352,15 @@ async function bazaarPinOnDiscord(row, link) {
         const ch = await discordRequest('GET', `/channels/${threadId}`).catch(() => null);
         if (!ch || ch.type !== 11) continue;
         const flags = Number(ch.flags) || 0;
+        if (!!(flags & BAZAAR_FORUM_PINNED) === pin) { bazaarFerrySync.seePin(deps.db, msg.id, pin); return; }
+        // A Discord forum pins one post. Haven may pin several, so while
+        // another post is pinned there this one stays pinned in Haven only,
+        // rather than take that post's place.
+        if (pin) {
+          const active = await discordRequest('GET', `/guilds/${ch.guild_id}/threads/active`).catch(() => null);
+          if (!active || !Array.isArray(active.threads)) return;
+          if (active.threads.some(t => t && t.parent_id === ch.parent_id && t.id !== ch.id && ((Number(t.flags) || 0) & BAZAAR_FORUM_PINNED))) return;
+        }
         await discordRequest('PATCH', `/channels/${threadId}`, { flags: pin ? flags | BAZAAR_FORUM_PINNED : flags & ~BAZAAR_FORUM_PINNED });
         bazaarFerrySync.seePin(deps.db, msg.id, pin);
         return;
@@ -2437,10 +2447,12 @@ function bazaarAnnouncePins(scope, { added, removed }) {
   }
 }
 
-// A forum post pinned or unpinned at the top of its forum on Discord.
-function bazaarTopicPinFromDiscord(d) {
+// A forum post pinned or unpinned at the top of its forum on Discord. Only a
+// change of the flag counts: a post is updated for many other reasons.
+function bazaarTopicPinFromDiscord(d, before) {
   try {
     if (!d || !d.id || d.flags === undefined) return;
+    if (before && before.pinned === !!((Number(d.flags) || 0) & BAZAAR_FORUM_PINNED)) return;
     const pinner = bazaarPinner();
     if (!pinner) return;
     const res = bazaarFerrySync.pinTopic(deps.db, String(d.id), !!((Number(d.flags) || 0) & BAZAAR_FORUM_PINNED), pinner);

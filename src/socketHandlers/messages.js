@@ -2499,8 +2499,10 @@ module.exports = function register(socket, ctx) {
     ).get(data.messageId);
     if (existing) return socket.emit('error-msg', 'Message is already pinned');
 
+    // Bizarre Bazaar fork: a reply's pin counts toward its topic's own
+    // limit (BAZAAR_TOPIC_PIN_LIMIT), not the channel's.
     const pinCount = db.prepare(
-      'SELECT COUNT(*) as cnt FROM pinned_messages WHERE channel_id = ?'
+      'SELECT COUNT(*) as cnt FROM pinned_messages p JOIN messages m ON m.id = p.message_id WHERE p.channel_id = ? AND m.thread_id IS NULL'
     ).get(channel.id);
     if (pinCount.cnt >= 50) {
       return socket.emit('error-msg', 'Channel has reached the 50-pin limit');

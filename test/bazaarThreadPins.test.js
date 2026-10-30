@@ -89,6 +89,11 @@ test('replies are pinned per topic, apart from the channel', async () => {
   assert.ok(await full, 'topic A is full');
   S.emit('pin-message', { messageId: replyB });
   assert.deepStrictEqual(await (async () => { await wait(300); return listOf(topicB); })(), [replyB], 'topic B still takes pins');
+  // The channel's own 50 count no reply pins: with 250 of them it still pins a topic.
+  S.emit('enter-channel', { code: topics.code });
+  await wait(200);
+  S.emit('pin-message', { messageId: topicA });
+  assert.ok(await (async () => { for (let i = 0; i < 30; i++) { if (db.prepare('SELECT 1 FROM pinned_messages WHERE message_id = ?').get(topicA)) return true; await wait(100); } return false; })(), 'the channel still takes pins');
 
   // Someone without the pin permission cannot.
   const bob = await h.register('bob');

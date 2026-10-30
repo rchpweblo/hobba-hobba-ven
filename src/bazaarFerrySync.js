@@ -247,6 +247,11 @@ function seePin(db, messageId, seen) {
   else db.prepare('DELETE FROM bazaar_pin_seen WHERE message_id = ?').run(messageId);
 }
 
+// A Haven pin or unpin of this message waits to be sent.
+function pendingPin(db, messageId) {
+  return !!db.prepare("SELECT 1 FROM bazaar_ferry_outbox WHERE haven_message_id = ? AND kind IN ('pin', 'unpin') LIMIT 1").get(messageId);
+}
+
 // A pin change that came from Discord is not sent back.
 function forgetPins(db, messageId) {
   db.prepare("DELETE FROM bazaar_ferry_outbox WHERE haven_message_id = ? AND kind IN ('pin', 'unpin')").run(messageId);
@@ -284,21 +289,24 @@ function reconcilePins(db, scope, discordIds, pinnerId) {
   const pinned = db.prepare('SELECT 1 FROM pinned_messages WHERE message_id = ?');
   db.transaction(() => {
     for (const m of wanted.values()) {
+      // A Haven pin or unpin still on its way to Discord is newer than
+      // Discord's list.
+      if (pendingPin(db, m.id)) continue;
       if (!pinned.get(m.id)) {
         db.prepare('INSERT INTO pinned_messages (message_id, channel_id, pinned_by) VALUES (?, ?, ?)').run(m.id, m.channel_id, pinnerId);
+        forgetPins(db, m.id); // what the insert just queued
         out.added.push({ id: m.id, thread_id: m.thread_id });
       }
       seePin(db, m.id, true);
-      forgetPins(db, m.id);
     }
     const current = scope.rootId
       ? db.prepare('SELECT m.id, m.thread_id FROM pinned_messages p JOIN messages m ON m.id = p.message_id JOIN bazaar_pin_seen s ON s.message_id = m.id WHERE m.thread_id = ?').all(scope.rootId)
       : db.prepare('SELECT m.id, m.thread_id FROM pinned_messages p JOIN messages m ON m.id = p.message_id JOIN bazaar_pin_seen s ON s.message_id = m.id JOIN channels c ON c.id = m.channel_id WHERE m.channel_id = ? AND m.thread_id IS NULL AND c.is_forum = 0').all(scope.channelId);
     for (const m of current) {
-      if (wanted.has(m.id)) continue;
+      if (wanted.has(m.id) || pendingPin(db, m.id)) continue;
       db.prepare('DELETE FROM pinned_messages WHERE message_id = ?').run(m.id);
+      forgetPins(db, m.id); // what the delete just queued
       seePin(db, m.id, false);
-      forgetPins(db, m.id);
       out.removed.push(m);
     }
   })();
@@ -315,18 +323,20 @@ function pinTopic(db, discordThreadId, isPinned, pinnerId) {
   // Only a forum post has the flag; a chat thread's first message is pinned
   // (or not) in its channel's own list.
   if (!db.prepare('SELECT is_forum FROM channels WHERE id = ?').get(scope.channelId)?.is_forum) return null;
+  if (pendingPin(db, scope.rootId)) return null;
   const has = db.prepare('SELECT 1 FROM pinned_messages WHERE message_id = ?').get(scope.rootId);
   let change = null;
   db.transaction(() => {
     if (isPinned && !has) {
       db.prepare('INSERT INTO pinned_messages (message_id, channel_id, pinned_by) VALUES (?, ?, ?)').run(scope.rootId, scope.channelId, pinnerId);
+      forgetPins(db, scope.rootId);
       change = 'added';
     } else if (!isPinned && has && db.prepare('SELECT 1 FROM bazaar_pin_seen WHERE message_id = ?').get(scope.rootId)) {
       db.prepare('DELETE FROM pinned_messages WHERE message_id = ?').run(scope.rootId);
+      forgetPins(db, scope.rootId);
       change = 'removed';
     }
     seePin(db, scope.rootId, isPinned);
-    forgetPins(db, scope.rootId);
   })();
   return change ? { change, ...scope } : null;
 }

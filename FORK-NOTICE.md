@@ -236,6 +236,8 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   `public/css/style-profile-servers-modals.css`, `public/locales/en.json`.
   Test: `test/bazaarThreadPages.test.js`.
 
+**2026-10-30, based on Haven v4.27.1** (merged in; everything above carries over unchanged)
+
 - **Pins cross Ferry both ways.** A message pinned or unpinned on Discord is pinned or unpinned
   in Haven, in a channel, a forum post or a thread (Discord says only that a channel's pins
   changed, so Ferry reads its whole list and makes Haven match). A forum post pinned at the top
@@ -244,10 +246,15 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   retries as they do; Discord needs the bot to hold Pin Messages, and without it the pin stays
   in Haven and the log says so once. A Haven pin is taken away by Discord's list only once it is
   known to have been on Discord (`bazaar_pin_seen`), so a pin Discord never had is never undone
-  by it, and pins the history importer copies are not sent back.
-  Files: `src/bazaarFerrySync.js`, `src/ferry.js`, `src/routes/import.js`.
-  Tests: `test/bazaarFerrySync.test.js`, `test/fakeDiscord.js`.
-
+  by it, and pins the history importer copies are not sent back. A Haven pin or unpin still
+  waiting to go out wins over Discord's list. A Discord forum pins one post: while another is
+  pinned there, a topic pinned in Haven stays pinned in Haven only rather than take its place.
+- **The channel's 50-pin limit leaves reply pins out.** Since release 16 a reply's pin counts
+  toward its topic's own limit, but the channel's limit still counted them too, so a forum whose
+  topics held 50 pinned replies could pin nothing more.
+  Files: `src/bazaarFerrySync.js`, `src/ferry.js`, `src/routes/import.js`,
+  `src/socketHandlers/messages.js`.
+  Tests: `test/bazaarFerrySync.test.js`, `test/fakeDiscord.js`, `test/bazaarThreadPins.test.js`.
 - **Banner messages.** Right-click a channel, or a forum post, and choose 📜 Set Banner Message:
   an optional title, a message with pictures and files, and a blur for NSFW, in a window like
   Edit post. The banner hangs at the top of the channel (or the post), above the messages, which
@@ -262,5 +269,3 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   `public/js/modules/app-channels.js`, `public/js/modules/app-channel-context.js`,
   `public/js/modules/app-forum.js`, `public/js/modules/app-socket-events.js` and
   `public/locales/en.json`. Test: `test/bazaarBanners.test.js`.
-
-**2026-10-30: Haven v4.27.1 merged in.** Everything above carries over unchanged.

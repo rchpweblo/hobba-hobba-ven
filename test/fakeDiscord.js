@@ -173,6 +173,9 @@ function startFakeDiscord(port) {
           res.writeHead(204); return res.end();
         }
       }
+      if (req.method === 'GET' && parts[0] === 'guilds' && parts[2] === 'threads' && parts[3] === 'active') {
+        return json(res, 200, { threads: [...threads.values()], members: [] });
+      }
       if (req.method === 'PATCH' && parts[0] === 'channels' && parts.length === 2) {
         const thread = threads.get(parts[1]);
         if (!thread) return json(res, 404, { message: 'Unknown Channel', code: 10003 });
