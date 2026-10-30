@@ -101,6 +101,25 @@ test('a read with `after` fetches only what came after it, across pages', async 
   fs.rmSync(path.join(os.tmpdir(), `haven-import-${done.body.importId}.json`), { force: true });
 });
 
+test('threads that share a name each get their own messages', async () => {
+  const chatId = db.prepare("INSERT INTO channels (name, code, created_by, discord_channel_id) VALUES ('chat', 'bbbb0002', 1, ?)").run(CHAT).lastInsertRowid;
+  const thread = (n) => ({ discordId: id(5000 + n), name: 'spam', kind: 'thread', parentId: CHAT,
+    messages: [{ discordId: id(5100 + n), author: 'someone', content: `spam ${n}`, timestamp: at(n) }] });
+  const data = { channels: [thread(1), thread(2), thread(3)] };
+  const importId = crypto.randomBytes(16).toString('hex');
+  fs.writeFileSync(path.join(os.tmpdir(), `haven-import-${importId}.json`), JSON.stringify(data));
+  const written = await call('POST /api/import/discord/execute', {
+    headers: { authorization: 'Bearer admin' },
+    body: { importId, copyFiles: false, selectedChannels: data.channels.map(c => ({ discordId: c.discordId, originalName: c.name, name: c.name })) },
+  });
+  const done = await job('execute', written);
+  assert.equal(done.body.success, true);
+  assert.equal(done.body.messagesImported, 3);
+  assert.equal(done.body.messagesSkipped, 0);
+  const got = db.prepare('SELECT content FROM messages WHERE channel_id = ? AND thread_id IS NOT NULL ORDER BY content').all(chatId).map(m => m.content);
+  assert.deepEqual(got, ['spam 1', 'spam 2', 'spam 3']);
+});
+
 test('catching up a forum post keeps its first new reply as a reply', async () => {
   // The forum and its post, as the first import left them.
   const forumId = db.prepare("INSERT INTO channels (name, code, created_by, discord_channel_id, is_forum) VALUES ('ideas', 'bbbb0001', 1, ?, 1)").run(FORUM).lastInsertRowid;

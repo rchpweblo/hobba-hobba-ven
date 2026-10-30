@@ -126,3 +126,8 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   post already in Haven keeps its first new reply as a reply; upstream took the earliest
   message read for the post's opening message.
   File: `src/routes/import.js`. Test: `test/bazaarCatchUp.test.js`.
+- **Threads that share a name all import.** The importer found each picked channel's messages by
+  Discord id or by name, whichever matched first, so of several threads with the same name
+  (say, "spam") every one after the first was written from the first one's messages and its
+  own were lost. A pick with a Discord id is now matched by id alone.
+  File: `src/routes/import.js`. Test: `test/bazaarCatchUp.test.js`.

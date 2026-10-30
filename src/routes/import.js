@@ -742,11 +742,14 @@ module.exports = function registerImport(deps) {
       // Channels first, so a thread finds its parent already in Haven.
       const entries = [];
       for (const sel of selectedChannels) {
-        // Find channel data by discordId or original name
-        const channelData = data.channels.find(c =>
-          (sel.discordId && c.discordId === sel.discordId) ||
-          c.name === sel.originalName
-        );
+        // Find channel data by discordId or original name.
+        // Bizarre Bazaar fork: by id alone when the pick has one. Matching
+        // either took the first entry with the same name, so of two threads
+        // both called "spam" the second was written from the first one's
+        // messages (all skipped as already there) and its own were lost.
+        const channelData = sel.discordId
+          ? data.channels.find(c => c.discordId === sel.discordId)
+          : data.channels.find(c => c.name === sel.originalName);
         if (!channelData || !channelData.messages) continue;
         entries.push({ sel, channelData });
       }
