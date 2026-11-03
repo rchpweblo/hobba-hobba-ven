@@ -46,15 +46,18 @@ _bazaarBannerChannelSwitch(code) {
 },
 
 // A thread finished loading: a forum post's banner is asked for (a chat
-// thread never has one, and the server does not answer for it). Pages of
-// the same post keep the banner that is showing.
+// thread never has one, and the server does not answer for it). It is asked
+// for every time: a banner set while the post was closed is announced to
+// nobody looking at it, so what was known before may be out of date. The
+// same post keeps the banner that is showing until the answer comes.
 _bazaarBannerThreadLoaded(data) {
   if (!this._bazaarBannerState) return;
   const id = Number(data && data.parentId);
   const cur = this._bazaarBannerState.topic;
-  if (cur && cur.topicId === id) return;
-  this._bazaarBannerState.topic = null;
-  this._bazaarPaintBanner('topic');
+  if (!cur || cur.topicId !== id) {
+    this._bazaarBannerState.topic = null;
+    this._bazaarPaintBanner('topic');
+  }
   if (id && this._forumActive) this.socket.emit('bazaar:get-banner', { code: this.currentChannel, topicId: id });
 },
 
@@ -178,14 +181,19 @@ _bazaarPaintBanner(kind) {
   const state = this._bazaarBannerState[kind];
   let el = document.getElementById(id);
   if (!state || !state.banner) { el?.remove(); return; }
-  const anchor = document.getElementById(kind === 'channel' ? 'messages' : 'thread-messages');
+  // A channel's banner hangs straight under the channel header, above the
+  // topic bar (made on the first channel switch, before any banner comes);
+  // a post's above its replies.
+  const anchor = kind === 'channel'
+    ? document.querySelector('.channel-header')?.nextElementSibling
+    : document.getElementById('thread-messages');
   if (!anchor) return;
   if (!el) {
     el = document.createElement('div');
     el.id = id;
     el.className = 'bz-banner';
   }
-  if (el.nextElementSibling !== anchor) anchor.parentNode.insertBefore(el, anchor);
+  if (anchor !== el && el.nextElementSibling !== anchor) anchor.parentNode.insertBefore(el, anchor);
   const b = state.banner;
   const key = kind === 'channel' ? `c:${state.code}` : `t:${state.topicId}`;
   const folded = this._bazaarIsFolded(key, b);

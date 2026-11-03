@@ -257,8 +257,10 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   Tests: `test/bazaarFerrySync.test.js`, `test/fakeDiscord.js`, `test/bazaarThreadPins.test.js`.
 - **Banner messages.** Right-click a channel, or a forum post, and choose 📜 Set Banner Message:
   an optional title, a message with pictures and files, and a blur for NSFW, in a window like
-  Edit post. The banner hangs at the top of the channel (or the post), above the messages, which
-  give up its height and scroll beneath it. A long banner stops at about 40% of the screen and
+  Edit post. The banner hangs at the top of the channel, right under its header and above the
+  topic bar (in a post, above the replies), and the messages give up its height and scroll
+  beneath it. A post's banner is asked for each time the post opens, so one set while it was
+  closed shows straight away. A long banner stops at about 40% of the screen and
   scrolls inside itself, and anyone can fold it to a slim strip, which sticks on that device
   until the banner changes. One banner a channel and one a forum post; chat threads have none.
   Set by whoever manages the channel's settings, and for a forum post also its starter. Haven
