@@ -419,7 +419,7 @@ _quoteJumpId(target) {
   return id > 0 ? id : null;
 },
 
-_jumpToMessage(msgId) {
+_jumpToMessage(msgId, bzLocated = false) {
   const existing = document.querySelector(`#messages [data-msg-id="${msgId}"]`);
   if (existing) {
     this._coupledToBottom = false;
@@ -428,6 +428,9 @@ _jumpToMessage(msgId) {
     setTimeout(() => existing.classList.remove('highlight-flash'), 2000);
     return;
   }
+  // Bizarre Bazaar fork: a reply in a thread opens in its thread
+  // (app-bazaar-thread-menu.js), which comes back here if it is not one.
+  if (!bzLocated && this._bazaarJumpToReply) return this._bazaarJumpToReply(msgId);
   // Message not in DOM: fetch messages around it
   this._jumpTargetId = msgId;
   this.socket.emit('get-messages', { code: this.currentChannel, around: msgId });

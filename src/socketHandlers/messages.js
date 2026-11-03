@@ -3158,8 +3158,9 @@ module.exports = function register(socket, ctx) {
     const after = paged && !before && !around && inThread(data.after) ? data.after : null;
 
     // Opening a thread marks every reply in it seen for this account, and the
-    // person's other devices drop the unread dot too (#5641).
-    if (!before && !around && !after) try {
+    // person's other devices drop the unread dot too (#5641). Bizarre Bazaar
+    // fork: so does opening it at one reply (`around`, a mention or a link).
+    if (!before && !after) try {
       db.prepare(`
         INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id)
         VALUES (?, ?, COALESCE((SELECT MAX(id) FROM messages WHERE thread_id = ?), 0))
@@ -3257,11 +3258,14 @@ module.exports = function register(socket, ctx) {
       });
     }
 
-    // Bizarre Bazaar fork: which replies are pinned in this topic.
+    // Bizarre Bazaar fork: which replies are pinned in this topic, and which
+    // are official (src/messageHighlights.js), as channel history has them.
     const bzPinned = new Set(msgIds.length ? db.prepare(`SELECT message_id FROM pinned_messages WHERE message_id IN (${msgIds.map(() => '?').join(',')})`).all(...msgIds).map(r => r.message_id) : []);
+    const bzHighlights = highlights.lookup(db, msgIds);
     const enriched = messages.map(m => {
       const obj = { ...m };
       if (bzPinned.has(m.id)) obj.pinned = true;
+      if (bzHighlights.has(m.id)) obj.highlight = bzHighlights.get(m.id);
       if (m.silent) obj.silent = true; else delete obj.silent;
       if (m.nsfw) obj.nsfw = true; else delete obj.nsfw;
       const atags = threadTagMap.get(m.id);
@@ -3342,6 +3346,19 @@ module.exports = function register(socket, ctx) {
       if (p.is_webhook && !p.imported_from) p.username = `[BOT] ${p.webhook_username || 'Bot'}`;
     }
     socket.emit('bazaar:thread-pins', { parentId: parent.id, channelCode: parent.code, pins });
+  });
+
+  // Bizarre Bazaar fork: which thread a reply is in, so a link to it can
+  // open the thread at the reply (app-bazaar-thread-menu.js). Answers {} for
+  // a message that is not a reply, or that this person cannot read.
+  socket.on('bazaar:locate-message', (data, cb) => {
+    if (typeof cb !== 'function') return;
+    if (!data || typeof data !== 'object' || !isInt(data.messageId)) return cb({});
+    const row = db.prepare(`SELECT m.thread_id, c.id AS channel_id, c.code, c.is_dm FROM messages m
+      JOIN channels c ON c.id = m.channel_id WHERE m.id = ?`).get(data.messageId);
+    // Membership and the channel's role gate; the admin anywhere but a DM.
+    if (!row || row.is_dm || !row.thread_id || !canTouchChannel(row.channel_id)) return cb({});
+    cb({ code: row.code, parentId: row.thread_id });
   });
 
   // ── Send message to thread ──────────────────────────────

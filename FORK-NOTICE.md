@@ -269,3 +269,16 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   `public/js/modules/app-channels.js`, `public/js/modules/app-channel-context.js`,
   `public/js/modules/app-forum.js`, `public/js/modules/app-socket-events.js` and
   `public/locales/en.json`. Test: `test/bazaarBanners.test.js`.
+- **Thread replies get the channel's right-click menu.** Right-click a reply in a thread or forum
+  topic for Edit, Reply, Quote, Pin, React, Copy Link, Protect, Edit Tags, Mark NSFW, Mark as
+  official and Delete, gated as in the channel, and Copy Link Address
+  over a link. Right-clicking the author's name or picture opens the user menu. A protected
+  reply shows its shield and has no Delete, and an official reply its role's colour and badge,
+  when the thread loads and as it changes. A link to a reply opens its thread at that reply
+  (`bazaar:locate-message`), however far back; so does a mention's jump. Opening a thread at a
+  reply marks it read, as opening it at the end does. Not on a reply: Thread and Select
+  messages; a role menu can never be in a thread, so Edit role menu never comes up.
+  Files: `public/js/modules/app-bazaar-thread-menu.js` (new), with hooks in `public/js/app.js`,
+  `public/js/modules/app-threads.js`, `app-messages.js` and `app-utilities.js` (a reply's
+  files, for Delete and Edit Tags), and `src/socketHandlers/messages.js`.
+  Tests: `test/bazaarThreadMenu.test.js`, `test/bazaarThreadMenuClient.test.js`.

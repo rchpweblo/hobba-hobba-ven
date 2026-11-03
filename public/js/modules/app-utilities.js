@@ -428,9 +428,10 @@ _getMessageAttachments(messageId) {
   // full re-render (which is why the retroactive "Edit tags" entry only showed
   // after a refresh or channel switch). Fall back to the rendered content in the
   // DOM, scoped to .message-content so an author avatar is not counted.
-  const el = document.querySelector(`#messages [data-msg-id="${messageId}"]`);
+  // Bizarre Bazaar fork: a reply in the open thread too.
+  const el = document.querySelector(`#messages [data-msg-id="${messageId}"], #thread-messages .thread-message[data-msg-id="${messageId}"]`);
   if (el) {
-    const body = el.querySelector('.message-content') || el;
+    const body = el.querySelector('.message-content, .thread-msg-content') || el;
     return this._extractUploadUrls(body.innerHTML);
   }
   return [];

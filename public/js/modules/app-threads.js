@@ -269,8 +269,11 @@ _openThread(parentId) {
   this._setThreadPiPEnabled(localStorage.getItem('haven_thread_panel_pip') === '1');
   if (this._channelBlocksPosting?.()) this._applyThreadClosed(false);
 
-  // Request thread messages from server
-  this.socket.emit('get-thread-messages', { parentId, paged: true }); // paged: Bizarre Bazaar fork
+  // Request thread messages from server. Bizarre Bazaar fork: a page at a
+  // time, and opened to reach one reply (a mention or a link) it starts on
+  // the replies around that one, however far back.
+  const bzAround = Number(this._threadJumpTarget) || null;
+  this.socket.emit('get-thread-messages', bzAround ? { parentId, paged: true, around: bzAround } : { parentId, paged: true });
 
   // Update header
   const msgEl = document.querySelector(`[data-msg-id="${parentId}"]`);
@@ -529,6 +532,7 @@ _appendThreadMessage(msg, opts = {}) {
   }
   if (msg.nsfw) this._applyMessageNsfw?.(el, true);
   if (msg.pinned) this._bazaarMarkThreadPin?.(el, true); // Bizarre Bazaar fork
+  this._bazaarDressThreadReply?.(el, msg); // Bizarre Bazaar fork: protected, official
   target.appendChild(el);
   if (target !== container) this._forumBlogRecount?.();
   // Link cards in threads, the same as in the channel (#5620).
