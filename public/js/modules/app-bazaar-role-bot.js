@@ -13,6 +13,7 @@ _bazaarSetupRoleBot(done) {
     this.socket.on('bazaar-role-bot-result', (r) => {
       this._bazaarLink = { ...(this._bazaarLink || {}), configured: true, linked: r.source !== 'none', discordUsername: r.discordUsername, given: r.given || [] };
       this._bazaarRenderLinkRow();
+      this._bazaarLoadDiscordRefs(); // a Discord mention of you now pings you (app-bazaar-discord-refs.js)
       const n = (r.given || []).length;
       this._showToast(n ? t('bazaar_role_bot.result_toast', { count: n }) : t('bazaar_role_bot.result_none'), n ? 'success' : 'info');
     });

@@ -292,7 +292,9 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   new message is pinged as for an @mention typed in Haven: sound, highlight, the mentions bell,
   and a push to their devices (not for a message sent on Discord with @silent, and not twice
   for the author of a Haven message the Discord reply answers). Copied history pings nobody.
+  Linking Discord takes effect straight away, without a reload, and notifications (the reply
+  push too) read the codes as names.
   Files: `src/bazaarFerryPings.js` (new), with hooks in `src/ferry.js`, `server.js`,
-  `public/js/app.js`, `public/js/modules/app-bazaar-discord-refs.js`, `app-utilities.js` and
-  `app-channel-unread.js` (a notification reads the codes as names). Tests:
+  `public/js/app.js`, `public/js/modules/app-bazaar-discord-refs.js`, `app-utilities.js`,
+  `app-channel-unread.js` and `app-bazaar-role-bot.js`. Tests:
   `test/bazaarFerryPings.test.js`; `test/ferry.test.js` now expects the code kept.

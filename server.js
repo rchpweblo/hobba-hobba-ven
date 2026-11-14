@@ -139,6 +139,7 @@ const { router: authRoutes, authLimiter, verifyToken } = require('./src/auth');
 const { setupSocketHandlers, sanitizeText, sanitizeSoundName, sanitizeBorderTransform, toReplyContext } = require('./src/socketHandlers');
 const { initFerry, stopFerry } = require('./src/ferry');
 const bazaarFerryThreads = require('./src/bazaarFerryThreads');
+const bazaarFerryPings = require('./src/bazaarFerryPings'); // Bizarre Bazaar fork
 const { threadExtras: forumBlogThreadExtras } = require('./src/forumBlog');
 const { canAccessVoiceChannel, getAccessibleVoiceChannels } = require('./src/botVoice');
 const { CREATOR_NOT_BANNED_SQL } = require('./src/botAccess');
@@ -3295,7 +3296,7 @@ initFerry({
       // for a reply from someone in Haven.
       if (replyRow && replyRow.user_id && socketRuntime?.sendPushNotifications) {
         const ch = db.prepare('SELECT name FROM channels WHERE id = ?').get(channelId);
-        socketRuntime.sendPushNotifications(channelId, channelCode, ch ? ch.name : '', 0, username, content,
+        socketRuntime.sendPushNotifications(channelId, channelCode, ch ? ch.name : '', 0, username, bazaarFerryPings.readableText(db, content),
           { onlyUserIds: [replyRow.user_id], replyToUserId: replyRow.user_id });
       }
       return result.lastInsertRowid;
