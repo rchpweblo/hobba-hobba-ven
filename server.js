@@ -3243,6 +3243,8 @@ initFerry({
   db,
   io,
   sanitizeText,
+  // Bizarre Bazaar fork: pushes linked people a Discord message mentions (src/bazaarFerryPings.js).
+  sendPushNotifications: (...args) => socketRuntime?.sendPushNotifications?.(...args),
   // A Discord forum post arrives through here too, with a title and tags, and
   // becomes a forum topic.
   insertHavenMessage: ({ channelId, channelCode, username, avatarUrl, content, title = null, tags = null, discordMessageId = null, replyTo = null }) => {

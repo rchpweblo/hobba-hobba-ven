@@ -284,3 +284,15 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   `public/js/modules/app-threads.js`, `app-messages.js` and `app-utilities.js` (a reply's
   files, for Delete and Edit Tags), and `src/socketHandlers/messages.js`.
   Tests: `test/bazaarThreadMenu.test.js`, `test/bazaarThreadMenuClient.test.js`.
+- **Discord @mentions ping the Haven people they name.** A person mentioned in a message Ferry
+  brings from Discord stays as Discord's `<@id>` instead of becoming their Discord name as plain
+  text (upstream). Haven shows it by name the way it shows copied history: the Haven name of
+  someone who linked Discord for the Role Bot, otherwise the Discord name, saved as the message
+  arrives, so a mention reads right as soon as its person links. A linked person mentioned in a
+  new message is pinged as for an @mention typed in Haven: sound, highlight, the mentions bell,
+  and a push to their devices (not for a message sent on Discord with @silent, and not twice
+  for the author of a Haven message the Discord reply answers). Copied history pings nobody.
+  Files: `src/bazaarFerryPings.js` (new), with hooks in `src/ferry.js`, `server.js`,
+  `public/js/app.js`, `public/js/modules/app-bazaar-discord-refs.js`, `app-utilities.js` and
+  `app-channel-unread.js` (a notification reads the codes as names). Tests:
+  `test/bazaarFerryPings.test.js`; `test/ferry.test.js` now expects the code kept.

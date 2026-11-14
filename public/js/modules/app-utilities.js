@@ -597,6 +597,8 @@ _refreshMentionableRoles() {
 
 /** True when `content` pings a role the viewer holds and role pings are on. */
 _mentionsMyRole(content) {
+  // Bizarre Bazaar fork: a Discord mention of your linked account (app-bazaar-discord-refs.js).
+  if (this._bazaarMentionsMe?.(content)) return true;
   if (!content || (this.notifications && this.notifications.roleMentionsEnabled === false)) return false;
   const pingable = new Set((this._mentionableRoles || []).map(r => r.id));
   const mine = ((this.user && Array.isArray(this.user.roles)) ? this.user.roles : [])

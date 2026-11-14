@@ -103,9 +103,10 @@ test('a malformed Discord user id is refused before it can reach the API', () =>
   assert.equal(resolveFerryTarget({ ...dm, dmUserId: '123456789012345678' }).discordUserId, '123456789012345678');
 });
 
-test('Discord mentions become readable names', () => {
-  // Discord writes mentions as <@id>. Relayed raw a Haven reader sees a bare
-  // number, so the names come from the message's own resolved mentions list.
+test('Discord person mentions keep their code', () => {
+  // Bizarre Bazaar fork (src/bazaarFerryPings.js): a person stays <@id>, which
+  // the client shows by name and which pings them once their Discord is
+  // linked. Upstream turned it into "@Alice" text. <@!id> is made <@id>.
   const msg = {
     content: 'hey <@111111111111111111> and <@!222222222222222222>',
     mentions: [
@@ -113,7 +114,7 @@ test('Discord mentions become readable names', () => {
       { id: '222222222222222222', username: 'bob' },
     ],
   };
-  assert.equal(buildHavenContent(msg), 'hey @Alice and @bob');
+  assert.equal(buildHavenContent(msg), 'hey <@111111111111111111> and <@222222222222222222>');
 
   // An id with nobody attached is left alone rather than guessed at.
   assert.equal(

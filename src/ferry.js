@@ -47,6 +47,7 @@ const bazaarFerryThreads = require('./bazaarFerryThreads');
 const bazaarFerrySync = require('./bazaarFerrySync');
 const importFiles = require('./importFiles');
 const bazaarStickers = require('./bazaarStickers');
+const bazaarFerryPings = require('./bazaarFerryPings');
 
 /**
  * The tests run Ferry against a stand-in Discord on this machine, set through
@@ -821,7 +822,7 @@ function relayToHaven(msg) {
       }
       touchLink(link.id, null);
     }
-    if (targets.length) rememberRelay(msg.id, content, targets);
+    if (targets.length) rememberRelay(msg.id, content, targets, msg);
   } catch (err) {
     console.error('Ferry inbound relay error:', err.message);
   }
@@ -848,17 +849,22 @@ function relayToThreadChannel(msg) {
   });
   if (havenId) {
     ferryReplies.recordPair(deps.db, { havenMessageId: havenId, discordMessageId: msg.id, discordChannelId: msg.channel_id, discordAuthorId: msg.author && msg.author.id });
-    rememberRelay(msg.id, content, [{ havenMessageId: havenId, channelCode: ch.code }]);
+    rememberRelay(msg.id, content, [{ havenMessageId: havenId, channelCode: ch.code }], msg);
   }
   return true;
 }
 
-function rememberRelay(discordMessageId, content, targets) {
+function rememberRelay(discordMessageId, content, targets, msg = null) {
   // Map preserves insertion order, so the first key is the oldest entry.
   if (relayedMessages.size >= RELAY_MAP_MAX) {
     relayedMessages.delete(relayedMessages.keys().next().value);
   }
   relayedMessages.set(discordMessageId, { content, targets });
+  // Bizarre Bazaar fork: linked people it mentions are pushed (src/bazaarFerryPings.js).
+  if (msg && deps) {
+    try { bazaarFerryPings.notify(deps.db, deps.sendPushNotifications, msg, content, targets); }
+    catch (err) { console.warn('[ferry] Discord mention push failed:', err.message); }
+  }
 }
 
 /**
@@ -973,7 +979,7 @@ function relayForumMessage(msg) {
       if (id) targets.push({ havenMessageId: id, channelCode: r.channel_code });
       touchLink(r.link_id, null);
     }
-    if (targets.length) rememberRelay(msg.id, content, targets);
+    if (targets.length) rememberRelay(msg.id, content, targets, msg);
     return true;
   }
 
@@ -1026,7 +1032,7 @@ function relayChatThreadReply(msg, thread) {
     if (id) targets.push({ havenMessageId: id, channelCode: link.channel_code });
     touchLink(link.id, null);
   }
-  if (targets.length) rememberRelay(msg.id, content, targets);
+  if (targets.length) rememberRelay(msg.id, content, targets, msg);
 }
 
 function stashStarter(msg) {
@@ -1159,7 +1165,7 @@ function relayForumStarter(msg, thread) {
       targets.push({ havenMessageId: topicId, channelCode: link.channel_code });
       touchLink(link.id, null);
     }
-    if (targets.length) rememberRelay(msg.id, content, targets);
+    if (targets.length) rememberRelay(msg.id, content, targets, msg);
   } catch (err) {
     console.error('Ferry forum relay error:', err.message);
   }
@@ -1428,12 +1434,9 @@ function translateDiscordMentions(text, msg) {
   // translated below and only when pings are allowed, is the one way a
   // Discord message pings a Haven role.
   let out = neutralizeLiteralPings(String(text || ''), msg && msg.mention_everyone === true);
-  for (const u of (msg && msg.mentions) || []) {
-    if (!u || !u.id) continue;
-    const name = u.global_name || u.username;
-    if (!name) continue;
-    out = out.split(`<@${u.id}>`).join(`@${name}`).split(`<@!${u.id}>`).join(`@${name}`);
-  }
+  // Bizarre Bazaar fork: a person stays as Discord's <@id>, shown by name in
+  // Haven and pinging them there once linked (src/bazaarFerryPings.js).
+  out = bazaarFerryPings.keepPersonCodes(deps && deps.db, out, msg);
   const guild = msg && msg.guild_id ? guilds.get(String(msg.guild_id)) : null;
   return translateDiscordRefs(out, guild, {
     pingRoles: deps ? boolSetting('ferry_allow_mentions', false) : false,
