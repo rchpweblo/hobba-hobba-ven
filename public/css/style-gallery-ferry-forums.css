@@ -1224,6 +1224,18 @@ html.reduce-motion .forum-unread-dot { animation: none; }
 /* ── Role tools: templates, gates, self-assign menus ───────────── */
 .tool-modal .tool-modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
 .tool-modal .tool-modal-body { max-height: 60vh; overflow: auto; }
+/* Add members picker (app-channel-add-members.js) */
+.am-picker { display: flex; flex-direction: column; gap: 6px; width: min(420px, 78vw); max-width: 100%; }
+.am-picker .am-search { width: 100%; max-width: none; box-sizing: border-box; }
+.am-picker label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9rem; }
+.am-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-top: 6px; }
+.am-all { font-weight: 600; padding: 4px 0; }
+.am-roles { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.am-users { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; max-height: 40vh; overflow-y: auto; overflow-x: hidden; }
+.am-user { padding: 3px 0; min-width: 0; }
+.am-user .am-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.am-user.am-in { opacity: 0.55; cursor: default; }
+.am-user .am-here { margin-left: auto; font-size: 0.75rem; color: var(--text-muted); }
 .tool-modal .settings-text-input { width: 100%; box-sizing: border-box; }
 .role-tpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 8px; margin-top: 10px; }
 .role-tpl-card { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; text-align: left; padding: 10px 12px; border: 1px solid var(--border-light); border-radius: 0.6rem; background: var(--bg-secondary, var(--bg-card)); color: var(--text-primary); cursor: pointer; font: inherit; }
@@ -1235,7 +1247,6 @@ html.reduce-motion .forum-unread-dot { animation: none; }
 .rg-roles, .rm-roles { max-height: 40vh; overflow: auto; border: 1px solid var(--border); border-radius: 0.5rem; padding: 4px 8px; margin-top: 8px; }
 .rm-row { display: flex; align-items: center; gap: 8px; }
 .rm-row .toggle-row { flex: 1; }
-.rm-row .rm-emoji { width: 3.6rem !important; text-align: center; }
 .role-menu-widget { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
 /* "Pick one" / "Pick up to 2" on a menu with a pick limit (#5800). */
 .role-menu-limit { flex-basis: 100%; font-size: 0.75rem; color: var(--text-muted); }
@@ -1349,6 +1360,28 @@ html.reduce-motion .forum-unread-dot { animation: none; }
   justify-content: center;
   gap: 6px;
 }
+/* The role's name opens its full editor (level, color, icon). */
+.perm-matrix-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.perm-matrix-edit:hover,
+.perm-matrix-edit:focus-visible { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.perm-matrix-edit-icon { opacity: 0.55; font-weight: 400; }
+.perm-matrix-edit:hover .perm-matrix-edit-icon { opacity: 1; }
+/* A click anywhere in the cell ticks its box (app-perm-matrix.js). */
+.perm-matrix-table tbody td:has(input[type="checkbox"]:not(:disabled)) { cursor: pointer; }
+.perm-matrix-table tbody td:has(input[type="checkbox"]:not(:disabled)):hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.perm-matrix-table tbody td input[type="checkbox"] { cursor: pointer; }
 .perm-matrix-swatch {
   width: 8px;
   height: 8px;

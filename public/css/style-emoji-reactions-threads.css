@@ -122,6 +122,11 @@
   outline-offset: -2px;
 }
 
+.emoji-item.emoji-fav, .reaction-full-btn.emoji-fav { position: relative; }
+.emoji-item.emoji-fav::after, .reaction-full-btn.emoji-fav::after { content: '★'; position: absolute; top: 0; right: 0.125rem; font-size: 0.5rem; color: var(--accent); pointer-events: none; }
+.emoji-cat:first-child .emoji-item.emoji-fav::after { content: none; }
+.emoji-fav-hint { margin: 0; padding: 0.375rem 0.25rem; font-size: 0.75rem; }
+
 /* ── Stickers ───────────────────────────────────────── */
 /* Inline rendered sticker in messages: larger than chat-image, no background. */
 .sticker-img {
@@ -1432,6 +1437,16 @@ body:has(#thread-panel.thread-panel-forum:not(.pip)) :is(#sidebar-toggle-btn, #s
 }
 .thread-message.editing .thread-msg-toolbar {
   display: none !important;
+}
+/* With a mouse the toolbar sits at the bottom of the message: beside the
+   reaction chips when it has some (_placeMessageToolbar), else in the corner.
+   A touch screen opens it from the ... button, at the top. */
+@media (hover: hover) and (pointer: fine) {
+  .msg-toolbar,
+  .thread-msg-toolbar {
+    top: auto;
+    bottom: 2px;
+  }
 }
 .thread-msg-toolbar button {
   width: 1.5rem;

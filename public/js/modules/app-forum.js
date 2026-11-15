@@ -134,7 +134,7 @@ _forumTitleOf(msg) {
   if (lp && typeof lp.title === 'string' && lp.title.trim()) return lp.title.trim().slice(0, 120);
   const lines = this._bazaarForumText(msg).split('\n').map(l => l.trim()).filter(l => l && !this._isImageUrl(l) && !/^(?:spoiler-img:)?\[file:/.test(l));
   const first = lines[0] || (this._isImageUrl(String(msg.content || '').trim()) ? t('forum.image_topic') : String(msg.content || ''));
-  return first.replace(/^#+\s*/, '').replace(/^\*\*(.+)\*\*$/, '$1').slice(0, 120);
+  return this._maskSpoilers(first).replace(/^#+\s*/, '').replace(/^\*\*(.+)\*\*$/, '$1').slice(0, 120);
 },
 
 // Bizarre Bazaar fork: a post's text with Discord's <@id> / <#id> codes as names.
@@ -146,10 +146,12 @@ _bazaarForumText(msg) {
 _forumSnippetOf(msg) {
   const lines = this._bazaarForumText(msg).split('\n').map(l => l.trim()).filter(l => l && !this._isImageUrl(l) && !/^(?:spoiler-img:)?\[file:/.test(l));
   const body = msg.title ? lines.join(' ') : lines.slice(1).join(' ');
-  return body.replace(/[*_`>#]/g, '').slice(0, 220);
+  return this._maskSpoilers(body).replace(/[*_`>#]/g, '').slice(0, 220);
 },
 
 _forumThumbOf(msg) {
+  // Hide media: the card shows its plain placeholder instead.
+  if (this._hideMediaOn?.()) return null;
   const content = String(msg.content || '');
   for (const line of content.split(/\s+/)) {
     const l = line.trim();
@@ -928,9 +930,12 @@ _setupSettingsSearch() {
   const apply = () => {
     const q = input.value.trim().toLowerCase();
     modal.querySelectorAll('.settings-section:not(#admin-mod-panel), #admin-mod-panel > .admin-settings').forEach(sec => {
-      const hit = !q || sec.textContent.toLowerCase().includes(q);
-      sec.classList.toggle('settings-search-hidden', !hit);
       const navItem = sec.id ? nav.querySelector(`.settings-nav-item[data-target="${sec.id}"]`) : null;
+      // A section this person cannot use (desktop-only in a browser, for
+      // one) is not a result: search used to show it with dead buttons.
+      const usable = !q || !navItem || navItem.style.display !== 'none';
+      const hit = usable && (!q || sec.textContent.toLowerCase().includes(q));
+      sec.classList.toggle('settings-search-hidden', !hit);
       if (navItem) navItem.classList.toggle('settings-search-hidden', !hit);
     });
     nav.querySelectorAll('.settings-nav-group-label').forEach(label => {

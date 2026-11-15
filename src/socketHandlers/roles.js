@@ -2,11 +2,12 @@
 
 const bcrypt = require('bcryptjs');
 const OTPAuth = require('otpauth');
-const { isString, isInt, VALID_ROLE_PERMS, ROLE_MENU_EMOJI_RE, roleMenuContent } = require('./helpers');
+const { isString, isInt, VALID_ROLE_PERMS, roleMenuContent } = require('./helpers');
 const { seedDefaultRoles, createAdminRole, grantAdminRole } = require('../roleDefaults');
 const createRoleRefresh = require('./roleRefresh');
 const { reachableChannel } = require('./channelAccess');
 const picks = require('../roleMenuPicks');
+const { isUsableEmoji } = require('../builtinEmojis');
 
 module.exports = function register(socket, ctx) {
   const {
@@ -119,12 +120,31 @@ module.exports = function register(socket, ctx) {
       }).filter(Boolean);
     } catch { return []; }
   }
+  // Who picked each role, for the button tooltip: the first 20 names and a
+  // count. A role hidden on profile cards (#5822) keeps its holders hidden
+  // here too, since everyone in the channel sees this list.
+  const PICKERS_FROM = 'FROM reactions x JOIN user_roles ur ON ur.user_id = x.user_id AND ur.role_id = ? AND ur.channel_id IS NULL JOIN users u ON u.id = x.user_id WHERE x.message_id = ? AND x.emoji = ?';
+  const rolePickers = (row) => {
+    const roles = readRoleMenu(row);
+    if (!roles.length) return {};
+    const hidden = new Set(db.prepare(`SELECT id FROM roles WHERE show_on_profile = 0 AND id IN (${roles.map(() => '?').join(',')})`).all(...roles.map(r => r.id)).map(r => r.id));
+    const names = db.prepare(`SELECT COALESCE(u.display_name, u.username) AS name ${PICKERS_FROM} ORDER BY x.id LIMIT 20`);
+    const count = db.prepare(`SELECT COUNT(*) AS n ${PICKERS_FROM}`);
+    return Object.fromEntries(roles.filter(r => !hidden.has(r.id)).map(r => {
+      const args = [r.id, row.message_id, r.emoji];
+      return [r.id, { names: names.all(...args).map(x => x.name), total: count.get(...args).n }];
+    }));
+  };
+  ctx.emitRolePickers = (code, messageId) => {
+    const row = db.prepare('SELECT * FROM role_menus WHERE message_id = ?').get(messageId);
+    if (row) io.to(`channel:${code}`).emit('role-menu-pickers', { channelCode: code, messageId, pickers: rolePickers(row) });
+  };
   ctx.buildRoleMenu = (row, viewerId) => {
     const roles = readRoleMenu(row);
     if (!roles.length) return null;
     const held = db.prepare('SELECT role_id FROM user_roles WHERE user_id = ? AND channel_id IS NULL').all(viewerId).map(r => r.role_id);
     const maxPicks = picks.maxPicksOf(row);
-    return { title: row.title || '', roles, held: roles.filter(r => held.includes(r.id)).map(r => r.id), ...(maxPicks ? { maxPicks } : {}) };
+    return { title: row.title || '', roles, held: roles.filter(r => held.includes(r.id)).map(r => r.id), pickers: rolePickers(row), ...(maxPicks ? { maxPicks } : {}) };
   };
 
   // Taking a role from a menu with a pick limit (#5800, src/roleMenuPicks.js):
@@ -288,14 +308,14 @@ module.exports = function register(socket, ctx) {
     return { roles: entries.map(e => ({ roleId: e.roleId, emoji: e.emoji })), ...(limit ? { maxPicks: limit } : {}) };
   }
   function roleMenuEntries(raw) {
-    const emojiOk = ROLE_MENU_EMOJI_RE;
     const wanted = Array.isArray(raw) ? raw.slice(0, 20) : [];
     const myLevel = socket.user.isAdmin ? 100 : getUserEffectiveLevel(socket.user.id);
     const seen = new Set();
     const entries = [];
     for (const e of wanted) {
       const roleId = isInt(e && e.roleId) ? e.roleId : null;
-      const emoji = isString(e && e.emoji, 1, 8) && emojiOk.test(e.emoji) ? e.emoji : null;
+      // A Unicode emoji, or a named one (Haven's own or the server's custom).
+      const emoji = isString(e && e.emoji, 1, 32) && isUsableEmoji(db, e.emoji) ? e.emoji : null;
       if (!roleId || !emoji || seen.has(roleId) || seen.has(emoji)) continue;
       const role = db.prepare('SELECT id, name, level FROM roles WHERE id = ?').get(roleId);
       if (!role) continue;
@@ -513,6 +533,7 @@ module.exports = function register(socket, ctx) {
     `).all(messageId);
     const ch = db.prepare('SELECT code FROM channels WHERE id = ?').get(row.channel_id);
     if (ch) io.to(`channel:${ch.code}`).emit('reactions-updated', { channelCode: ch.code, messageId, reactions });
+    if (ch) ctx.emitRolePickers(ch.code, messageId);
     notifySelfRole(socket.user.id, messageId, roleId, held);
     cb({ success: true, held });
   });

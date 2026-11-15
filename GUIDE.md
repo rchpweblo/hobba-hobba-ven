@@ -2,13 +2,16 @@
 
 Welcome to **Haven**, your private chat server. This guide covers everything you need to get Haven running and invite your friends.
 
+Prefer to watch? There are short [video tutorials](https://haven-app.com/tutorials.html) for the most common tasks, also on [YouTube](https://www.youtube.com/@Haven-App_Tutorials) and [Rumble](https://rumble.com/user/HavenApp).
+
 ---
 
 ## What You Need
 
 - **Windows 10 or 11** (macOS / Linux can run it manually)
 - **Node.js** version 22 to 26 → [Download here](https://nodejs.org/)
-- About **50 MB** of disk space
+- About **200 MB** of disk space, plus whatever your community uploads
+- About **100 MB** of free memory for a small group. A Raspberry Pi is enough; measured numbers for every size are in [How much hardware does Haven need?](docs/hardware.md)
 - **OR** just [Docker](https://docs.docker.com/get-docker/), no Node.js needed
 
 ---
@@ -16,6 +19,8 @@ Welcome to **Haven**, your private chat server. This guide covers everything you
 ## Docker Setup (Alternative)
 
 If you'd rather run Haven in a container (great for NAS boxes, servers, or if you just like Docker):
+
+Video: [Install with Docker](https://haven-app.com/tutorials.html#install-docker)
 
 ### Quick Start
 
@@ -169,6 +174,8 @@ See the [Proxmox VE LXC Deployment Guide](docs/examples/proxmox-lxc/README.md) f
 ## Getting Started
 
 ### Step 1: First Launch
+
+Videos: [Install on Windows](https://haven-app.com/tutorials.html#install-windows) · [Install on Linux](https://haven-app.com/tutorials.html#install-linux) · [First login](https://haven-app.com/tutorials.html#first-login)
 
 Double-click **`Start Haven.bat`**
 
@@ -1329,6 +1336,12 @@ To DM a Discord user (when the admin has enabled it), type `=>@` and search by n
 - **Set `PUBLIC_URL`** in your `.env` if you want Haven avatars to appear on the Discord
   side, and files too big for Discord to show as links. Discord has to be able to reach
   them over the internet. Without it names still come through, just without avatars
+- **Reactions cross both ways** on messages Ferry carried. A reaction on Discord shows on
+  the Haven copy with the person's Discord name. A reaction in Haven makes the bot react
+  on Discord, once per emoji, since Discord only lets a bot react as itself; it stays
+  while anyone who may send to Discord has that emoji on the message. The bot needs
+  **Add Reactions** in the channel. Custom emoji cross when the other side has one with
+  the same name
 - **Discord attachments arrive as links**, and Discord's own links expire after about a
   day. The text of the message is permanent, the pictures are not
 - **Other Discord bots are ignored** unless an admin turns on **Relay other bots**,
@@ -1418,7 +1431,7 @@ the timestamp generators people already use work here too.
 
 | Key | Action |
 |-----|--------|
-| `Shift+Enter` | New line |
+| `Shift+Enter` | New line (on a phone or tablet, plain `Enter` is a new line and the Send button sends) |
 | `Ctrl+F` | Search messages |
 | `@` | Mention autocomplete |
 | `:` | Emoji autocomplete (type 2+ characters) |
@@ -1708,6 +1721,35 @@ All webhook endpoints are rate-limited to **30 requests per minute** per IP.
 ### Callback Payloads
 
 If your webhook has a `callback_url` and `callback_secret` configured, Haven will POST command invocations to your URL. The payload includes an HMAC signature in the `X-Haven-Signature` header that you should verify using your callback secret.
+
+### Receiving Messages
+
+A bot with a `callback_url` also hears ordinary chat: every message posted in its channel is sent to that URL as it arrives, so a bot can read what people say and answer with the Sending Messages call above. This is how assistants and chat bridges plug in. Each delivery looks like this:
+
+```
+POST <your callback_url>
+Content-Type: application/json
+X-Haven-Event: message
+X-Haven-Signature: sha256=<HMAC of the body with your callback secret>
+
+{
+  "event": "message",
+  "channelId": "<channel code>",
+  "timestamp": "2026-10-27T18:04:11.000Z",
+  "message": {
+    "id": 1234,
+    "content": "hey bot, what's the weather?",
+    "author": { "id": 7, "username": "alice" },
+    "reply_to": null,
+    "is_webhook": false,
+    "timestamp": "2026-10-27 18:04:11"
+  }
+}
+```
+
+- Bot posts (its own included) are not sent back, so a bot cannot loop on itself.
+- DMs never reach a bot, and a bot only hears its channel while the person who made it can still read that channel.
+- The callback URL must be reachable from the server. A bot on your own network (`192.168.x`, `localhost`, a sibling Docker container) needs `HAVEN_ALLOW_PRIVATE_CALLBACKS=true` in `.env`. A failed delivery is retried once, and the last result shows on the bot's card in Settings.
 
 ---
 

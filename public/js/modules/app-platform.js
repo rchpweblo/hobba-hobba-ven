@@ -196,7 +196,7 @@ _initDesktopAppBanner() {
     if (ua.includes('win')) platform = t('platform.desktop.windows_installer');
     else if (ua.includes('linux')) platform = t('platform.desktop.linux_installer');
     else if (ua.includes('mac')) platform = t('platform.desktop.macos_installer');
-    meta.textContent = `${platform} \u2022 v1.0.0`;
+    meta.textContent = platform;
   }
 
   const laterBtn = document.getElementById('desktop-promo-later');
@@ -1961,7 +1961,7 @@ _decryptE2EFiles(root) {
           // Loop and Keep playing, as on files outside encrypted DMs (#5825).
           // A voice message gets neither there either.
           if (!(isAudio && /^voice-message/i.test(name))) {
-            infoBar.insertAdjacentHTML('beforeend', (this._loopHtml?.() || '') + (this._keepPlayingHtml?.() || ''));
+            infoBar.insertAdjacentHTML('beforeend', this._mediaControlsHtml?.(isVideo ? 'video' : 'audio') || '');
           }
           row.appendChild(infoBar);
 

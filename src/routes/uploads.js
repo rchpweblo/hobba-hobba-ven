@@ -6,6 +6,7 @@ const path = require('path');
 const { verifyToken } = require('../auth');
 const { GAMES_ROMS_DIR } = require('../paths');
 const storage = require('../storage');
+const { blockedUploadType } = require('../uploadBlocklist');
 const ROOT = path.join(__dirname, '..', '..');
 
 module.exports = function registerUploads(deps) {
@@ -109,6 +110,14 @@ module.exports = function registerUploads(deps) {
       // original text (fixes garbled Chinese/emoji/non-ASCII filenames).
       const originalName = Buffer.from(req.file.originalname || 'file', 'latin1').toString('utf8');
       const fileSize = req.file.size;
+
+      // File types the admin refuses, such as exe or bat (#5833)
+      const blockedList = getDb().prepare("SELECT value FROM server_settings WHERE key = 'blocked_upload_extensions'").get()?.value;
+      const blockedType = blockedUploadType(originalName, blockedList) || blockedUploadType(req.file.filename, blockedList);
+      if (blockedType) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({ error: `.${blockedType} files can't be uploaded on this server` });
+      }
 
       try { await storage.admitUpload(req.file); } catch { return res.status(500).json({ error: 'Failed to store the upload' }); }
       recordUploadOwnership(user.id, req.file.filename, fileSize, uploadScopeFromRequest(req));

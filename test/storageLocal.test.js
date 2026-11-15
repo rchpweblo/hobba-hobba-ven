@@ -94,3 +94,17 @@ test('list walks every file with its size', async () => {
   for await (const f of storage.list('stickers/')) stickers.push(f.rel);
   assert.deepEqual(stickers, ['stickers/a.png']);
 });
+
+test('list lets the server answer requests during a long walk', async () => {
+  const dir = path.join(UPLOADS_DIR, 'walk-test');
+  fs.mkdirSync(dir, { recursive: true });
+  for (let i = 0; i < 450; i++) fs.writeFileSync(path.join(dir, `f${i}.bin`), 'x');
+  let ticks = 0;
+  const timer = setInterval(() => { ticks++; }, 0);
+  let n = 0;
+  for await (const f of storage.list('walk-test/')) { if (f) n++; }
+  clearInterval(timer);
+  assert.equal(n, 450);
+  assert.ok(ticks > 0, 'other work ran while the folder was walked');
+  fs.rmSync(dir, { recursive: true, force: true });
+});

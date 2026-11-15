@@ -4,7 +4,48 @@
 
 export default {
 
-_formatContent(str) {
+_copyCodeBlock(button) {
+  const code = button?.closest('.code-block')?.querySelector('pre code')?.textContent;
+  if (typeof code !== 'string') return false;
+
+  const label = button.dataset.copyLabel || t('common.copy');
+  const showCopied = () => {
+    const copiedLabel = t('common.copied');
+    button.dataset.label = `✓ ${copiedLabel}`;
+    button.setAttribute?.('aria-label', copiedLabel);
+    button.title = copiedLabel;
+    clearTimeout(button._copyResetTimer);
+    button._copyResetTimer = setTimeout(() => {
+      if (!button.isConnected) return;
+      button.dataset.label = label;
+      button.setAttribute?.('aria-label', label);
+      button.title = label;
+      button._copyResetTimer = null;
+    }, 1500);
+  };
+
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable');
+    return navigator.clipboard.writeText(code).then(() => {
+      showCopied();
+      return true;
+    }).catch(() => {
+      let copied = false;
+      this._copyTextFallback?.(code, () => { copied = true; showCopied(); });
+      if (!copied) this._showToast?.(t('common.copy_failed'), 'error');
+      return copied;
+    });
+  } catch {
+    let copied = false;
+    this._copyTextFallback?.(code, () => { copied = true; showCopied(); });
+    if (!copied) this._showToast?.(t('common.copy_failed'), 'error');
+    return Promise.resolve(copied);
+  }
+},
+
+// opts.e2e: the text came from an end-to-end encrypted DM. Formatting is the
+// same; plugins that patch this method use it to leave private text alone.
+_formatContent(str, opts) {
   if (typeof str !== 'string') str = String(str ?? '');
   // Control characters have no business in a message, and NUL in particular
   // is the delimiter of the placeholders below; strip them (keeping line
@@ -34,6 +75,7 @@ _formatContent(str) {
   if (e2eImgMatch) {
     const mime = this._escapeHtml(e2eImgMatch[1]);
     const url = this._escapeHtml(e2eImgMatch[2]);
+    if (this._isMediaHeld?.(e2eImgMatch[2])) return this._hiddenImagePlaceholder(e2eImgMatch[2], e2eImgMatch[1]);
     return `<img data-e2e-src="${url}" data-e2e-mime="${mime}" class="chat-image e2e-img-pending" alt="${t('app.messages.e2e_image_alt')}" title="${t('app.messages.e2e_image_title')}">`;
   }
 
@@ -92,7 +134,8 @@ _formatContent(str) {
         const l = lines[i];
         if (!mediaLine(l.trim())) { text.push(l); continue; }
         flush();
-        const run = this._mediaGridOff ? [] : (this._mediaGridRun?.(lines, i) || []);
+        // With Hide media on, each picture gets its own click-to-show tag.
+        const run = (this._mediaGridOff || this._hideMediaOn?.()) ? [] : (this._mediaGridRun?.(lines, i) || []);
         if (run.length >= 2) {
           parts.push(this._mediaGridHtml(run));
           i += run.length - 1;
@@ -156,13 +199,20 @@ _formatContent(str) {
     // if the element fires `error`, so listing a format here is safe.
     if (['mp3', 'ogg', 'oga', 'wav', 'm4a', 'aac', 'flac', 'opus', 'weba'].includes(ext)) {
       return `<div class="file-attachment">
-        <div class="file-info"><span class="file-type-icon" aria-hidden="true">${icon}</span> <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span>${this._loopHtml?.() || ''}${this._keepPlayingHtml?.() || ''}${this._musicListenHtml?.(fileUrl, fileName) || ''}</div>
+        <div class="file-info"><span class="file-type-icon" aria-hidden="true">${icon}</span> <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span>${this._mediaControlsHtml?.('audio', this._musicListenHtml?.(fileUrl, fileName) || '') || ''}</div>
         <audio controls preload="none" src="${fileUrl}" class="file-audio"></audio>
       </div>`;
     }
     if (['mp4', 'webm', 'mov', 'm4v', 'ogv'].includes(ext)) {
+      // Hide media: the name and size show, the player waits for a click.
+      if (this._isMediaHeld?.(fileMatch[2])) {
+        return `<div class="file-attachment">
+        <div class="file-info"><span class="file-type-icon" aria-hidden="true">${icon}</span> <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span></div>
+        ${this._hiddenImagePlaceholder(fileMatch[2], 'video')}
+      </div>`;
+      }
       return `<div class="file-attachment">
-        <div class="file-info"><span class="file-type-icon" aria-hidden="true">${icon}</span> <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span>${this._loopHtml?.() || ''}${this._keepPlayingHtml?.() || ''}</div>
+        <div class="file-info"><span class="file-type-icon" aria-hidden="true">${icon}</span> <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span>${this._mediaControlsHtml?.('video') || ''}</div>
         <div class="file-video-wrap">
           <video controls preload="none" src="${fileUrl}" class="file-video"></video>
         </div>
@@ -227,12 +277,21 @@ _formatContent(str) {
     codeBlocks.push({ lang: lang || '', code });
     return ph('CODEBLOCK', idx);
   });
+  // `inline code` is set aside too, so nothing inside it turns into a link,
+  // a mention, an emoji or formatting: backticks are how to post a URL as
+  // plain text.
+  const inlineCode = [];
+  const withInlineCode = withPlaceholders.replace(/`([^`]+)`/g, (_, code) => {
+    const idx = inlineCode.length;
+    inlineCode.push(code);
+    return ph('INLINECODE', idx);
+  });
 
   // ── Timestamps: <t:1780853820> / <t:1780853820:R> ──
   // Extracted before escaping (the token has angle brackets) and after the
   // code fences above, so a token inside ``` stays literal.
   const timestamps = [];
-  const withTimestamps = withPlaceholders.replace(/<t:(-?\d{1,15})(?::([tTdDfFR]))?>/g, (full, secs, style) => {
+  const withTimestamps = withInlineCode.replace(/<t:(-?\d{1,15})(?::([tTdDfFR]))?>/g, (full, secs, style) => {
     const rendered = this._formatTimestampToken(Number(secs), style || 'f');
     if (!rendered) return full;
     const idx = timestamps.length;
@@ -359,6 +418,9 @@ _formatContent(str) {
       }
     }
   }
+  // Names that belong to an account, before persona names are added below:
+  // only these open a profile card, so a persona never leads to its owner.
+  const accountByName = new Map(nameToUserId);
   const selfLogin = (this.user.username || '').toLowerCase();
   if (selfLogin) validNames.add(selfLogin);
   // Also include known persona names so @PersonaName lights up as a mention
@@ -415,7 +477,10 @@ _formatContent(str) {
     const uid = nameToUserId.get(lower);
     const nick = uid && this._nicknames ? this._nicknames[uid] : null;
     const display = nick || loginToDisplay.get(lower) || name;
-    return `<span class="mention${isSelf ? ' mention-self' : ''}">@${this._escapeHtml(display)}</span>`;
+    // The account behind the name, so a click can open its profile card (#5878).
+    const cardId = Number(accountByName.get(lower) || (isSelf && this.user.id)) || 0;
+    const card = cardId ? ` data-mention-user="${cardId}"` : '';
+    return `<span class="mention${isSelf ? ' mention-self' : ''}"${card}>@${this._escapeHtml(display)}</span>`;
   });
 
   // ── @everyone / @here mentions ──
@@ -433,6 +498,10 @@ _formatContent(str) {
   // ## headings or message IDs (#1234) don't get linkified spuriously.
   if (Array.isArray(this.channels) && this.channels.length) {
     const chanByName = new Map();
+    // Two channels can differ only in capitals (#Bug-Reports in one place,
+    // #bug-reports in another). The name as typed is tried first, so each
+    // link goes to its own channel; any other casing still finds one.
+    const chanByExactName = new Map();
     const nameByCode = new Map();
     // Names a channel used to have, so a #old-name typed before a rename
     // still points at it and reads as the name it has now (#5602). A current
@@ -441,6 +510,7 @@ _formatContent(str) {
     for (const c of this.channels) {
       if (c && c.name && c.code && !c.is_dm) {
         chanByName.set(String(c.name).toLowerCase(), c.code);
+        chanByExactName.set(String(c.name), c.code);
         nameByCode.set(c.code, String(c.name));
         let former = [];
         try { former = typeof c.former_names === 'string' ? JSON.parse(c.former_names) : (c.former_names || []); } catch { former = []; }
@@ -470,7 +540,7 @@ _formatContent(str) {
         for (let k = cuts.length - 1; k >= 0; k--) {
           const name = unescape(run.slice(0, cuts[k]));
           const lower = name.toLowerCase();
-          let code = lookup(chanByName, lower);
+          let code = lookup(chanByExactName, name) || lookup(chanByName, lower);
           let label = name;
           if (!code) {
             code = lookup(formerByName, lower);
@@ -513,9 +583,6 @@ _formatContent(str) {
 
   // Render ==highlight==
   html = html.replace(/==(.+?)==/g, '<mark class="chat-highlight">$1</mark>');
-
-  // Render `inline code`
-  html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
 
   // Render grouped > blockquotes and preserve attribution lines inside the quote.
   // A line quotes only when the > is followed by a space, another >, or
@@ -676,8 +743,15 @@ _formatContent(str) {
     const escaped = this._escapeHtml(block.code).replace(/\n$/, '');
     const langAttr = block.lang ? ` data-lang="${this._escapeHtml(block.lang)}"` : '';
     const langLabel = block.lang ? `<span class="code-block-lang">${this._escapeHtml(block.lang)}</span>` : '';
-    const rendered = `<div class="code-block"${langAttr}>${langLabel}<pre><code>${escaped}</code></pre></div>`;
+    const copyLabel = this._escapeHtml(t('common.copy'));
+    // The word is drawn by CSS from data-label, so it stays out of the message's
+    // text: reply previews read textContent, and selecting a message copies it.
+    const copyButton = `<button type="button" class="code-block-copy" data-copy-label="${copyLabel}" data-label="${copyLabel}" aria-label="${copyLabel}" title="${copyLabel}"></button>`;
+    const rendered = `<div class="code-block"${langAttr}>${langLabel}${copyButton}<pre><code>${escaped}</code></pre></div>`;
     html = html.replace(ph('CODEBLOCK', idx), () => rendered);
+  });
+  inlineCode.forEach((code, idx) => {
+    html = html.replace(ph('INLINECODE', idx), () => `<code class="inline-code">${this._escapeHtml(code)}</code>`);
   });
 
   // ── Restore markdown links/images ──
@@ -804,6 +878,7 @@ _renderReactions(msgId, reactions) {
   // Group by emoji
   const grouped = {};
   reactions.forEach(r => {
+    if (this._roleMenuHidesReaction?.(msgId, r.emoji)) return;
     if (!grouped[r.emoji]) grouped[r.emoji] = { emoji: r.emoji, users: [] };
     grouped[r.emoji].users.push({ id: r.user_id, username: r.username });
   });
@@ -822,7 +897,7 @@ _renderReactions(msgId, reactions) {
     return `<button class="reaction-badge${isOwn ? ' own' : ''}" data-emoji="${this._escapeHtml(g.emoji)}" data-users="${usersJson}" title="${this._escapeHtml(names)}">${emojiDisplay} ${g.users.length}</button>`;
   }).join('');
 
-  return `<div class="reactions-row">${badges}</div>`;
+  return badges ? `<div class="reactions-row">${badges}</div>` : '';
 },
 
 _updateMessageReactions(messageId, reactions) {
@@ -843,6 +918,7 @@ _updateMessageReactions(messageId, reactions) {
     if (!html) return;
     const content = msgEl.querySelector('.message-content, .thread-msg-content');
     if (content) content.insertAdjacentHTML('afterend', html);
+    if (msgEl.matches(':hover')) this._placeMessageToolbar?.(msgEl);
   });
 
   if (wasAtBottom) this._scrollToBottom(true);
@@ -856,9 +932,19 @@ _updateMessageReactions(messageId, reactions) {
 // label, not the address they are stored under (an encrypted picture's
 // "e2e-img:image/png:/uploads/..." used to show as it was).
 // Several pictures in a row read as one count, not a label each (#5799).
+// A spoiler stays hidden wherever a message is shown as plain text. The same
+// pattern the renderer uses, which also leaves `||` inside code alone.
+_maskSpoilers(text) {
+  return String(text ?? '').replace(/(```[\s\S]*?```|`[^`\n]+`)|\|\|.+?\|\|/g, (m, code) => code || '▒▒▒');
+},
+
 _replyPreviewText(content) {
   const isPicture = (l) => this._isImageUrl(l) || /^\/uploads\/\S+$/i.test(l);
-  const lines = String(content || '').split('\n').map(l => l.trim()).filter(Boolean);
+  let text = this._maskSpoilers(content || '');
+  // A reply can carry only the start of a long message, which may cut off the
+  // bars that close a spoiler.
+  if (String(content || '').length >= 200) text = text.replace(/\|\|[^\n]*$/, '▒▒▒');
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   return lines.map((l, i) => {
     if (isPicture(l)) {
       if (i > 0 && isPicture(lines[i - 1])) return null;
@@ -881,7 +967,14 @@ _replyPreviewText(content) {
 _renderReplyBanner(replyCtx) {
   const text = this._replyPreviewText(replyCtx.content);
   const previewText = text.length > 80 ? text.substring(0, 80) + '…' : text;
-  const color = this._getUserColor(replyCtx.username);
+  // The same color the name has on the message itself: the role's color in
+  // "colored name" mode, otherwise the color made from the username.
+  let color = this._getUserColor(replyCtx.username);
+  const ownName = !replyCtx.is_webhook && !replyCtx.imported_from && !replyCtx.persona_username;
+  const member = ownName ? this._memberById?.(replyCtx.user_id) : null;
+  if ((localStorage.getItem('haven-role-display') || 'colored-name') === 'colored-name' && member?.role?.color) {
+    color = this._safeColor(member.role.color, color);
+  }
   return `
     <div class="reply-banner" data-reply-msg-id="${replyCtx.id}">
       <span class="reply-line" style="background:${color}"></span>
@@ -924,7 +1017,7 @@ _setReply(msgEl, msgId) {
     }
   }
   author = author || t('voice.someone');
-  const content = msgEl.querySelector('.message-content')?.textContent || '';
+  const content = this._replyPreviewText(msgEl.dataset.rawContent || msgEl.querySelector('.message-content')?.textContent || '');
   const preview = content.length > 60 ? content.substring(0, 60) + '…' : content;
 
   this.replyingTo = { id: msgId, username: author, content };
@@ -1153,7 +1246,7 @@ _startEditMessage(msgEl, msgId) {
     }
     if (this._composerListKey(e, textarea)) return;
 
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && this._enterSends(e)) {
       e.preventDefault();
       btnRow.querySelector('.edit-save-btn').click();
     }

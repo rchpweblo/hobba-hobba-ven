@@ -5,19 +5,19 @@ const path   = require('path');
 const fs     = require('fs');
 const webpush = require('web-push');
 
-const { verifyToken, generateChannelCode, generateToken } = require('../auth');
+const { verifyTokenAsync, generateChannelCode, generateToken } = require('../auth');
 const { sendFcm, isFcmEnabled } = require('../fcm');
 const { DATA_DIR } = require('../paths');
 const HAVEN_VERSION = require('../../package.json').version;
 
-const { sanitizeText, sanitizeSoundName, utcStamp, isString, isInt, isValidUploadPath, sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, filterIdleOnline, toReplyContext } = require('./helpers');
+const { sanitizeText, sanitizeSoundName, utcStamp, isString, isInt, isValidUploadPath, sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, filterIdleOnline, maskSpoilers, toReplyContext } = require('./helpers');
 const { socketClientIp } = require('../clientIp');
 const automod = require('../automod');
 const { resolveSpotifyToYouTube, searchYouTube, fetchYouTubePlaylist, extractYouTubeVideoId, resolveMusicMetadata } = require('./musicResolver');
 const createPermissions = require('./permissions');
+const createChannelLists = require('./channelList');
 const { diskStatus } = require('../diskGuard');
 const highlights = require('../messageHighlights');
-const { grantAdminRole } = require('../roleDefaults');
 const {
   UnsafeCallbackError,
   agentForDestination,
@@ -50,6 +50,7 @@ const { createActivity } = require('../activity');
 const createDmCalls = require('../dmCalls');
 const ferry = require('../ferry');
 const bazaarFerryThreads = require('../bazaarFerryThreads');
+const ferryReactions = require('../ferryReactions');
 
 const registerChannels   = require('./channels');
 const registerMessages   = require('./messages');
@@ -66,6 +67,7 @@ const createRoleRefresh  = require('./roleRefresh');
 const registerFerry      = require('./ferry');
 const registerGroupE2E   = require('./groupE2E');
 const registerTags       = require('./tags');
+const registerChannelTypes = require('./channelTypes');
 const registerMemberDefaults = require('./memberDefaults');
 const registerGameActivity = require('./gameActivity');
 const registerMessageHighlights = require('./messageHighlights');
@@ -79,13 +81,13 @@ const modCases = require('../modCases');
 const { quietRecipients, pingedRecipients } = require('../pushMutes');
 const registerForumUnread = require('./forumUnread');
 const registerThreadReadState = require('./threadReadState');
-const forumUnread = require('../forumUnread');
-const { groupHistoryFloor } = require('../groupHistory');
 const registerForumVotes = require('./forumVotes');
 const registerForumPictureVotes = require('./forumPictureVotes');
 const registerBadges = require('./badges');
 const registerMoveToThread = require('./moveToThread');
+const registerChannelAddAll = require('./channelAddAll');
 const registerMessageNsfw = require('./messageNsfw');
+const registerBlockedNames = require('./blockedNames');
 const createLiveAccess = require('./liveAccess');
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
 
@@ -138,6 +140,10 @@ function setupSocketHandlers(io, db, opts = {}) {
     parseRoleGate, roleGateAllows, getUserUploadMb, syncRoleGateMemberships
   } = createPermissions(db);
 
+  const { getEnrichedChannels, getEnrichedChannelsAsync } = createChannelLists({
+    db, userHasPermission, roleGateAllows, getUserEffectiveLevel
+  });
+
   // Required roles are membership (#5649): settle every gated channel once
   // at start-up, so an update or a migration leaves nobody half in.
   try { syncRoleGateMemberships(); } catch (err) { console.error('role gate membership sync failed:', err.message); }
@@ -149,8 +155,9 @@ function setupSocketHandlers(io, db, opts = {}) {
   const activeMusic         = new Map(); // code → { url, userId, username, playbackState, ... }
   const musicQueues         = new Map(); // code → [{ id, url, title, userId, username, resolvedFrom }]
   const activeScreenSharers = new Map(); // code → Set<userId>
-  const activeScreenSessions = new Map(); // code → Map<userId, { transport, sessionId }>
+  const activeScreenSessions = new Map(); // code → Map<userId, { transport, sessionId, streamId }>
   const activeWebcamUsers   = new Map(); // code → Set<userId>
+  const activeWebcamStreamIds = new Map(); // code → Map<userId, MediaStream.id>
   const userFloodBuckets    = new Map(); // `${userId}:${bucket}` → number[] (send timestamps)
   // Presence timing for the "idle but online" flag. onlineSince is set when a
   // user goes from having zero live sockets to one; lastActiveAt advances only
@@ -201,7 +208,7 @@ function setupSocketHandlers(io, db, opts = {}) {
   const state = {
     channelUsers, voiceUsers, voiceLastActivity,
     activeMusic, musicQueues,
-    activeScreenSharers, activeScreenSessions, activeWebcamUsers,
+    activeScreenSharers, activeScreenSessions, activeWebcamUsers, activeWebcamStreamIds,
     streamViewers,
     slowModeTracker, pendingTempDelete, pendingVoiceLeave,
     botAudioManager
@@ -484,278 +491,6 @@ function setupSocketHandlers(io, db, opts = {}) {
     }
   }
 
-  // ── getEnrichedChannels ─────────────────────────────────
-  // `shared` (optional) carries per-channel answers that are the same for
-  // every viewer, so a broadcast to thousands of people works them out once.
-  function getEnrichedChannels(userId, isAdmin, joinRooms, shared = null) {
-    // Holders of 'view_all_channels' (e.g. a server-wide Mod role) get the
-    // same visibility treatment as the admin: every non-DM channel, with
-    // membership filled in on the fly, so channels created after the role
-    // was granted show up for them automatically instead of someone having
-    // to add every mod to every new channel by hand.
-    const seesAll = isAdmin || userHasPermission(userId, 'view_all_channels');
-    // Only auto-joins owed to the permission are marked. An admin's are not:
-    // admin is not a role that gets revoked in the same casual way, and their
-    // memberships should survive a permission cleanup. (#5512)
-    const autoJoin = seesAll && !isAdmin ? 1 : 0;
-    let channels;
-    if (seesAll) {
-      channels = db.prepare(`
-        SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm, c.is_group,
-               c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
-               c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
-               c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.reactions_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
-               c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
-               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout, c.forum_votes, c.forum_blog, c.forum_blog_pics_only, c.bazaar_staff_topics, c.bazaar_role_exclude
-        FROM channels c WHERE c.is_dm = 0
-        UNION
-        SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm, c.is_group,
-               c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
-               c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
-               c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.reactions_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
-               c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
-               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout, c.forum_votes, c.forum_blog, c.forum_blog_pics_only, c.bazaar_staff_topics, c.bazaar_role_exclude
-        FROM channels c
-        JOIN channel_members cm ON c.id = cm.channel_id
-        WHERE cm.user_id = ? AND c.is_dm = 1
-        ORDER BY is_dm, position, name
-      `).all(userId);
-      // OR IGNORE, so a membership the user already had by other means keeps
-      // its existing flag and survives a later cleanup.
-      const insertMember = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id, auto_all_channels) VALUES (?, ?, ?)');
-      channels.forEach(ch => { if (!ch.is_dm) insertMember.run(ch.id, userId, autoJoin); });
-    } else {
-      channels = db.prepare(`
-        SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm, c.is_group,
-               c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
-               c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
-               c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.reactions_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
-               c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
-               c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout, c.forum_votes, c.forum_blog, c.forum_blog_pics_only, c.bazaar_staff_topics, c.bazaar_role_exclude
-        FROM channels c
-        JOIN channel_members cm ON c.id = cm.channel_id
-        WHERE cm.user_id = ?
-        ORDER BY c.is_dm, c.position, c.name
-      `).all(userId);
-
-      // Self-heal legacy accounts that somehow ended up with zero memberships.
-      // Never into a channel whose code is hidden: that is how someone kicked
-      // from their only channel was put straight back into it.
-      // This restores visibility without requiring the user to manually join by code.
-      if (channels.length === 0) {
-        const userRow = db.prepare('SELECT is_guest FROM users WHERE id = ?').get(userId);
-        if (!userRow || !userRow.is_guest) {
-          let targetRows = [];
-          try {
-            const djc = db.prepare("SELECT value FROM server_settings WHERE key = 'default_join_channels'").get();
-            const parsed = djc && djc.value ? JSON.parse(djc.value) : [];
-            const ids = Array.isArray(parsed)
-              ? parsed.map(n => parseInt(n, 10)).filter(n => Number.isInteger(n) && n > 0)
-              : [];
-
-            if (ids.length > 0) {
-              const ph = ids.map(() => '?').join(',');
-              targetRows = db.prepare(
-                `SELECT id FROM channels WHERE is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private') AND id IN (${ph})`
-              ).all(...ids);
-            }
-          } catch {
-            targetRows = [];
-          }
-
-          if (targetRows.length === 0) {
-            targetRows = db.prepare(
-              "SELECT id FROM channels WHERE is_dm = 0 AND is_private = 0 AND (code_visibility IS NULL OR code_visibility != 'private') ORDER BY position, name"
-            ).all();
-          }
-
-          if (targetRows.length > 0) {
-            const insertMember = db.prepare('INSERT OR IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)');
-            for (const row of targetRows) insertMember.run(row.id, userId);
-            channels = db.prepare(`
-              SELECT c.id, c.name, c.code, c.created_by, c.topic, c.is_dm, c.is_group,
-                     c.code_visibility, c.code_mode, c.code_rotation_type, c.code_rotation_interval,
-                     c.parent_channel_id, c.position, c.is_private, c.expires_at, c.is_temp_voice,
-                     c.streams_enabled, c.music_enabled, c.media_enabled, c.soundboard_enabled, c.reactions_enabled, c.slow_mode_interval, c.category, c.sort_alphabetical,
-                     c.cleanup_exempt, c.channel_type, c.voice_user_limit, c.notification_type, c.voice_enabled, c.text_enabled, c.voice_bitrate,
-                     c.afk_sub_code, c.afk_timeout_minutes, c.read_only, c.auto_delete_mode, c.auto_delete_interval_hours, c.default_role_id, c.show_welcome, c.is_forum, c.forum_tags, c.is_nsfw, c.former_names, c.role_gate, c.forum_layout, c.forum_votes, c.forum_blog, c.forum_blog_pics_only, c.bazaar_staff_topics, c.bazaar_role_exclude
-              FROM channels c
-              JOIN channel_members cm ON c.id = cm.channel_id
-              WHERE cm.user_id = ?
-              ORDER BY c.is_dm, c.position, c.name
-            `).all(userId);
-          }
-        }
-      }
-    }
-
-    // A role gate hides the channel from anyone who fails it, membership or
-    // not. Admins see everything, as they do for private channels.
-    if (!isAdmin) channels = channels.filter(ch => ch.is_dm || roleGateAllows(userId, ch));
-    // Bizarre Bazaar fork: which roles a channel is hidden from is the admin's business.
-    if (!isAdmin) channels.forEach(ch => { delete ch.bazaar_role_exclude; });
-
-    if (channels.length > 0) {
-      const channelIds = channels.map(c => c.id);
-      const placeholders = channelIds.map(() => '?').join(',');
-
-      const readRows = db.prepare(
-        `SELECT channel_id, last_read_message_id FROM read_positions WHERE user_id = ? AND channel_id IN (${placeholders})`
-      ).all(userId, ...channelIds);
-      const readMap = {};
-      readRows.forEach(r => { readMap[r.channel_id] = r.last_read_message_id; });
-
-      const latestMap = {};
-      const unknown = shared ? channelIds.filter(id => !shared.latest.has(id)) : channelIds;
-      if (unknown.length) {
-        const latestRows = db.prepare(
-          `SELECT channel_id, MAX(id) as latest_id FROM messages WHERE channel_id IN (${unknown.map(() => '?').join(',')}) AND thread_id IS NULL GROUP BY channel_id`
-        ).all(...unknown);
-        if (shared) unknown.forEach(id => shared.latest.set(id, 0));
-        latestRows.forEach(r => { latestMap[r.channel_id] = r.latest_id; if (shared) shared.latest.set(r.channel_id, r.latest_id); });
-      }
-      if (shared) channelIds.forEach(id => { latestMap[id] = shared.latest.get(id) || 0; });
-
-      channels.forEach(ch => {
-        // A group DM member's count starts where their history does.
-        const lastRead = Math.max(readMap[ch.id] || 0, groupHistoryFloor(db, ch, userId));
-        const latestId = latestMap[ch.id] || 0;
-        ch.latestMessageId = latestId;
-        if (latestId > lastRead) {
-          const countRow = db.prepare(
-            // Exclude thread replies (thread_id IS NOT NULL): they live in their
-            // own thread panel, never appear in the channel scroll, and so can
-            // never be marked-read by scrolling. Counting them here pins a
-            // phantom unread on the channel forever.
-            // Counting stops at 1000: badges show 99+ past 99 anyway, and an
-            // uncapped count walked every unread message of a long-idle member
-            // on every channel-list refresh.
-            // (user_id IS NULL OR ...): imported and relayed messages belong
-            // to no account, and NULL != ? is never true, so they never
-            // counted (#5771). A group DM's "joined" / "left" lines are not
-            // new messages.
-            "SELECT COUNT(*) as cnt FROM (SELECT 1 FROM messages WHERE channel_id = ? AND id > ? AND (user_id IS NULL OR user_id != ?) AND thread_id IS NULL AND COALESCE(type, 'user') != 'notice' LIMIT 1000)"
-          ).get(ch.id, lastRead, userId);
-          ch.unreadCount = countRow ? countRow.cnt : 0;
-        } else {
-          ch.unreadCount = 0;
-        }
-        // A forum's replies are not counted above, so it reports its unread
-        // topics separately for the sidebar dot.
-        if (ch.is_forum) {
-          try {
-            ch.forumUnread = forumUnread.countCached(db, userId, ch.id);
-          } catch (err) {
-            console.warn('[forum-unread] count failed:', err.message);
-            ch.forumUnread = 0;
-          }
-        }
-
-        // Whether this viewer may post in a read-only channel, answered per
-        // channel. The client only ever had a flat permission list that merges
-        // server-wide grants with every channel-scoped one, so holding
-        // read_only_override in a single channel made the composer appear in
-        // every read-only channel. The send was still refused server-side, so
-        // the box looked usable and silently was not. (#5468)
-        if (ch.read_only === 1 && !ch.is_dm) {
-          ch.canOverrideReadOnly = isAdmin || userHasPermission(userId, 'read_only_override', ch.id);
-        }
-
-        // Whether this viewer may invite someone into this private channel.
-        // Mirrors the rule the invite-to-channel handler already enforces:
-        // admin, the channel's creator, or a moderator within that channel.
-        // The menu only ever offered private channels to admins, so creators
-        // and channel moderators held the right with no way to use it. This
-        // does not widen the rule, it just lets the UI match it. (#5466)
-        if (!ch.is_dm && (ch.is_private || ch.code_visibility === 'private')) {
-          ch.canInvitePrivate = isAdmin
-            || ch.created_by === userId
-            || userHasPermission(userId, 'kick_user', ch.id);
-        }
-
-        // Same per-channel answer for the two channel-management surfaces the
-        // flat permission list gets wrong. Holding manage_channel_settings in
-        // one channel put "Channel Functions" in every channel's menu, and
-        // holding manage_sub_channels in one channel offered "Create
-        // Sub-channel" everywhere. Both were refused server-side, so the
-        // controls were there but dead. (#5467)
-        if (!ch.is_dm) {
-          ch.canManageSettings = isAdmin || userHasPermission(userId, 'manage_channel_settings', ch.id);
-          ch.canManageSubs = isAdmin || userHasPermission(userId, 'manage_sub_channels', ch.id);
-        }
-
-        if (ch.is_dm) {
-          const otherUser = db.prepare(`
-            SELECT u.id, COALESCE(u.display_name, u.username) as username,
-                   u.avatar, u.avatar_shape AS avatarShape
-            FROM users u
-            JOIN channel_members cm ON u.id = cm.user_id
-            WHERE cm.channel_id = ? AND u.id != ?
-          `).get(ch.id, userId);
-          if (ch.is_group) {
-            ch.dm_target = otherUser || null;
-            ch.group_members = db.prepare(`
-              SELECT u.id, COALESCE(u.display_name, u.username) as username, u.avatar, u.avatar_shape AS avatarShape
-              FROM users u JOIN channel_members cm ON u.id = cm.user_id WHERE cm.channel_id = ? ORDER BY u.id
-            `).all(ch.id);
-            ch.group_pending = db.prepare(`
-              SELECT u.id, COALESCE(u.display_name, u.username) as username
-              FROM users u JOIN dm_group_invites i ON u.id = i.user_id WHERE i.channel_id = ? ORDER BY u.id
-            `).all(ch.id);
-          } else if (otherUser) {
-            ch.dm_target = otherUser;
-          } else {
-            // Self-DM: only one channel_members row, no "other" user. Use self as the partner.
-            const self = db.prepare(
-              'SELECT id, COALESCE(display_name, username) as username, avatar, avatar_shape AS avatarShape FROM users WHERE id = ?'
-            ).get(userId);
-            ch.dm_target = self || null;
-            ch.is_self_dm = 1;
-          }
-          // Who in this DM skips the link filter: the browser checks links in
-          // encrypted messages itself, and marked an admin's links blocked.
-          try {
-            ch.link_exempt_ids = db.prepare(`
-              SELECT u.id, u.is_admin FROM users u JOIN channel_members cm ON u.id = cm.user_id WHERE cm.channel_id = ?
-            `).all(ch.id).filter(m => automod.linkExempt({ isAdmin: !!m.is_admin, effectiveLevel: getUserEffectiveLevel(m.id) })).map(m => m.id);
-          } catch (err) {
-            // Nobody counted as exempt: links are checked as before.
-            console.warn('[automod] DM exemption lookup failed:', err.message);
-            ch.link_exempt_ids = [];
-          }
-        }
-      });
-    }
-
-    if (joinRooms) {
-      channels.forEach(ch => joinRooms(`channel:${ch.code}`));
-    }
-
-    channels.forEach(ch => {
-      // DM channels route by code internally but the code is a pure implementation
-      // detail. Never expose it as a copyable value: strip all code-related fields
-      // so no client surface can accidentally reveal or share it.
-      if (ch.is_dm) {
-        ch.display_code = null;
-        delete ch.code_visibility;
-        delete ch.code_mode;
-        delete ch.code_rotation_type;
-        delete ch.code_rotation_interval;
-        return;
-      }
-      if (isAdmin) {
-        ch.display_code = ch.code;
-      } else if (ch.code_visibility === 'private' || ch.is_private) {
-        const isMod = ch.created_by === userId || userHasPermission(userId, 'kick_user', ch.id);
-        ch.display_code = isMod ? ch.code : '••••••••';
-      } else {
-        ch.display_code = ch.code;
-      }
-    });
-
-    return channels;
-  }
-
   // ── Channel member list (@mention autocomplete source) ──
   // A ban leaves channel_members alone on purpose, so an unban puts the person
   // back in exactly the channels they were in. That meant banned accounts kept
@@ -893,6 +628,16 @@ function setupSocketHandlers(io, db, opts = {}) {
         if (sessions) {
           sessions.delete(userId);
           if (sessions.size === 0) activeScreenSessions.delete(code);
+        }
+        const camUsers = activeWebcamUsers.get(code);
+        if (camUsers) {
+          camUsers.delete(userId);
+          if (camUsers.size === 0) activeWebcamUsers.delete(code);
+        }
+        const camStreamIds = activeWebcamStreamIds.get(code);
+        if (camStreamIds) {
+          camStreamIds.delete(userId);
+          if (camStreamIds.size === 0) activeWebcamStreamIds.delete(code);
         }
         streamViewers.delete(`${code}:${userId}`);
         for (const [key, viewers] of streamViewers) {
@@ -1361,6 +1106,8 @@ function setupSocketHandlers(io, db, opts = {}) {
 
     const camUsers = activeWebcamUsers.get(code);
     if (camUsers) { camUsers.delete(socket.user.id); if (camUsers.size === 0) activeWebcamUsers.delete(code); }
+    const camStreamIds = activeWebcamStreamIds.get(code);
+    if (camStreamIds) { camStreamIds.delete(socket.user.id); if (camStreamIds.size === 0) activeWebcamStreamIds.delete(code); }
 
     const viewerKey = `${code}:${socket.user.id}`;
     streamViewers.delete(viewerKey);
@@ -1598,6 +1345,7 @@ function setupSocketHandlers(io, db, opts = {}) {
         if (parsed && parsed.v && parsed.ct) displayContent = 'Sent a message';
       } catch { /* not JSON, use as-is */ }
 
+      displayContent = maskSpoilers(displayContent);
       const body = displayContent.length > 120 ? displayContent.slice(0, 117) + '...' : displayContent;
       const title = `${senderUsername} in #${channelName}`;
       const payload = JSON.stringify({
@@ -1901,6 +1649,26 @@ function setupSocketHandlers(io, db, opts = {}) {
   }
 
   /**
+   * A reaction on Haven changed on a message Ferry carried (src/ferryReactions.js).
+   * The bot can only react as itself, once per emoji, so it reacts while
+   * someone who may use Ferry in this channel has that emoji on the message,
+   * and stops when the last of them takes it off.
+   */
+  function ferryReactionChanged({ messageId, channelId, emoji, added }) {
+    const cfg = ferry.getConfig();
+    if (!cfg.enabled || !cfg.token || !ferryLinksFor(channelId).length) return;
+    try {
+      const adminRow = db.prepare('SELECT is_admin FROM users WHERE id = ?');
+      const mayUse = (uid) => !!adminRow.get(uid)?.is_admin || userHasPermission(uid, 'use_ferry', channelId);
+      const on = ferryReactions.botShouldReact(db, messageId, emoji, mayUse);
+      if (added && on) ferry.reactOnDiscord(messageId, emoji, true);
+      else if (!added && !on) ferry.reactOnDiscord(messageId, emoji, false);
+    } catch (err) {
+      console.warn('[ferry] reaction relay check failed:', err.message);
+    }
+  }
+
+  /**
    * Relays one just-sent reply in a Haven forum topic into the Discord forum
    * post that topic is linked to. Same rules as ferryRelay: Ferry on, the
    * sender holds use_ferry, and only the channel's own pairings. A topic with
@@ -2021,11 +1789,15 @@ function setupSocketHandlers(io, db, opts = {}) {
     }
   }, 30 * 1000);
 
-  // Temporary channel cleanup (every 60s)
+  // Temporary channel cleanup (every 60s). expires_at is stored as an ISO
+  // time ("2026-10-25T03:44:00.000Z"), which compared as text with
+  // datetime('now') ("2026-10-25 02:44:00") only ran out once the date
+  // changed, so a 1 hour channel lived until the next day. datetime() reads
+  // both the same way.
   setInterval(() => {
     try {
       const expired = db.prepare(
-        "SELECT id, code, auto_delete_mode, auto_delete_interval_hours FROM channels WHERE expires_at IS NOT NULL AND expires_at <= datetime('now')"
+        "SELECT id, code, auto_delete_mode, auto_delete_interval_hours FROM channels WHERE expires_at IS NOT NULL AND datetime(expires_at) <= datetime('now')"
       ).all();
       for (const ch of expired) {
         if (ch.auto_delete_mode === 'clear') {
@@ -2245,128 +2017,139 @@ function setupSocketHandlers(io, db, opts = {}) {
   });
 
   // Auth middleware
-  io.use((socket, next) => {
-    const botToken = socket.handshake.auth?.botToken;
-    if (botToken !== undefined) {
-      const webhook = getBotVoiceWebhookByToken(db, botToken);
-      if (!webhook) return next(new Error('Webhook not found or inactive'));
-      if (!webhook.can_use_voice) return next(new Error('Bot voice permission is disabled'));
-      socket.user = {
-        id: -webhook.id,
-        webhookId: webhook.id,
-        botToken,
-        username: `bot-${webhook.id}`,
-        displayName: webhook.name,
-        channelId: webhook.channel_id,
-        channelCode: webhook.channel_code,
-        isBot: true,
-        isAdmin: false,
-        isGuest: false
-      };
-      return next();
-    }
-
-    const token = socket.handshake.auth?.token;
-    if (!token || typeof token !== 'string') return next(new Error('Authentication required'));
-    // This client merges member-list deltas (online-users-delta).
-    socket.presenceDeltas = socket.handshake.auth?.presenceDeltas === 1;
-
-    const user = verifyToken(token);
-    if (!user) return next(new Error('Invalid token'));
-
-    const ban = db.prepare('SELECT id FROM bans WHERE user_id = ?').get(user.id);
-    if (ban) return next(new Error('You have been banned from this server'));
-
-    socket.user = user;
-
+  io.use(async (socket, next) => {
     try {
-      // created_at feeds the automod new-account link gate (v3.42.0).
-      const uRow = db.prepare('SELECT display_name, is_admin, username, avatar, avatar_shape, border, border_transform, animate_profile, password_version, is_guest, created_at, oidc_subject, e2e_passphrase, birthday, birthday_set_at, birthday_hide_year, birthday_hidden, bio FROM users WHERE id = ?').get(user.id);
-      if (!uRow || uRow.username !== user.username) {
-        return next(new Error('Session expired'));
+      // SQLite's checks and legacy session writes stay in one synchronous
+      // block after token verification; PostgreSQL uses the async readers.
+      const botToken = socket.handshake.auth?.botToken;
+      if (botToken !== undefined) {
+        const webhook = getBotVoiceWebhookByToken(db, botToken);
+        if (!webhook) return next(new Error('Webhook not found or inactive'));
+        if (!webhook.can_use_voice) return next(new Error('Bot voice permission is disabled'));
+        socket.user = {
+          id: -webhook.id,
+          webhookId: webhook.id,
+          botToken,
+          username: `bot-${webhook.id}`,
+          displayName: webhook.name,
+          channelId: webhook.channel_id,
+          channelCode: webhook.channel_code,
+          isBot: true,
+          isAdmin: false,
+          isGuest: false
+        };
+        return next();
       }
-      const dbPwv = uRow.password_version || 1;
-      const tokenPwv = user.pwv || 1;
-      if (tokenPwv < dbPwv) {
-        return next(new Error('Session expired'));
-      }
-      socket.user.displayName = uRow.display_name || user.username;
-      socket.user.avatar = uRow.avatar || null;
-      socket.user.avatar_shape = uRow.avatar_shape || 'circle';
-      socket.user.border = uRow.border || null;
-      socket.user.borderTransform = parseBorderTransform(uRow.border_transform);
-      socket.user.animate_profile = uRow.animate_profile || 'trigger';
-      socket.user.isGuest = !!uRow.is_guest;
-      socket.user.createdAt = uRow.created_at || null;
-      socket.user.birthday = uRow.birthday || null;
-      socket.user.birthdaySetAt = uRow.birthday_set_at || null;
-      socket.user.birthdayHideYear = uRow.birthday_hide_year !== 0;
-      socket.user.birthdayHidden = uRow.birthday_hidden !== 0;
-      socket.user.bio = uRow.bio || '';
-      // (#12) The client needs this to ask for the right secret: an SSO
-      // account unlocks E2E with its encryption passphrase, not a password.
-      socket.user.isSso = !!uRow.oidc_subject;
-      // Likewise an account whose key backup has its own passphrase.
-      socket.user.e2ePassphrase = !!uRow.e2e_passphrase;
 
-      const anyAdmin = db.prepare('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').get();
-      if (!anyAdmin && uRow.username.toLowerCase() === ADMIN_USERNAME && !uRow.is_admin) {
-        db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(user.id);
-        grantAdminRole(db, user.id);
-        uRow.is_admin = 1;
-      }
-      socket.user.isAdmin = !!uRow.is_admin;
-    } catch (err) {
-      // The account could not be checked (revoked? still admin?), so the
-      // connection is refused rather than trusting what the token says.
-      console.warn('[socket] account check failed at connect:', err.message);
-      return next(new Error('Server error, try again'));
-    }
+      const token = socket.handshake.auth?.token;
+      if (!token || typeof token !== 'string') return next(new Error('Authentication required'));
+      // This client merges member-list deltas (online-users-delta).
+      socket.presenceDeltas = socket.handshake.auth?.presenceDeltas === 1;
 
-    try {
-      const statusRow = db.prepare('SELECT status, status_text FROM users WHERE id = ?').get(user.id);
-      if (statusRow) {
-        const dbStatus = statusRow.status || 'online';
-        if (dbStatus === 'away') {
-          socket.user.status = 'online';
-          socket.user.statusText = statusRow.status_text || '';
-          db.prepare('UPDATE users SET status = ? WHERE id = ?').run('online', user.id);
-        } else {
-          socket.user.status = dbStatus;
-          socket.user.statusText = statusRow.status_text || '';
+      const user = await verifyTokenAsync(token);
+      if (!user) return next(new Error('Invalid token'));
+
+      const asyncAccountReads = db.async.kind !== 'sqlite';
+      const accountDb = asyncAccountReads ? db.async : db;
+      let ban = accountDb.prepare('SELECT id FROM bans WHERE user_id = ?').get(user.id);
+      if (asyncAccountReads) ban = await ban;
+      if (ban) return next(new Error('You have been banned from this server'));
+
+      socket.user = user;
+
+      try {
+        // created_at feeds the automod new-account link gate (v3.42.0).
+        let uRow = accountDb.prepare('SELECT display_name, is_admin, username, avatar, avatar_shape, border, border_transform, animate_profile, password_version, is_guest, created_at, oidc_subject, e2e_passphrase, birthday, birthday_set_at, birthday_hide_year, birthday_hidden, bio FROM users WHERE id = ?').get(user.id);
+        if (asyncAccountReads) uRow = await uRow;
+        if (!uRow || uRow.username !== user.username) {
+          return next(new Error('Session expired'));
         }
-      }
-    } catch { /* status is cosmetic; the user just starts with the default status */ }
+        const dbPwv = uRow.password_version || 1;
+        const tokenPwv = user.pwv || 1;
+        if (tokenPwv < dbPwv) {
+          return next(new Error('Session expired'));
+        }
+        socket.user.displayName = uRow.display_name || user.username;
+        socket.user.avatar = uRow.avatar || null;
+        socket.user.avatar_shape = uRow.avatar_shape || 'circle';
+        socket.user.border = uRow.border || null;
+        socket.user.borderTransform = parseBorderTransform(uRow.border_transform);
+        socket.user.animate_profile = uRow.animate_profile || 'trigger';
+        socket.user.isGuest = !!uRow.is_guest;
+        socket.user.createdAt = uRow.created_at || null;
+        socket.user.birthday = uRow.birthday || null;
+        socket.user.birthdaySetAt = uRow.birthday_set_at || null;
+        socket.user.birthdayHideYear = uRow.birthday_hide_year !== 0;
+        socket.user.birthdayHidden = uRow.birthday_hidden !== 0;
+        socket.user.bio = uRow.bio || '';
+        // (#12) The client needs this to ask for the right secret: an SSO
+        // account unlocks E2E with its encryption passphrase, not a password.
+        socket.user.isSso = !!uRow.oidc_subject;
+        // Likewise an account whose key backup has its own passphrase.
+        socket.user.e2ePassphrase = !!uRow.e2e_passphrase;
 
-    try {
-      socket.user.roles = getUserRoles(user.id);
-      socket.user.effectiveLevel = getUserEffectiveLevel(user.id);
-    } catch { socket.user.roles = []; socket.user.effectiveLevel = socket.user.isAdmin ? 100 : 0; }
-
-    // Record IP for future "ban IP" lookups. Kept to the 5 most-recent
-    // distinct IPs per user; older entries are pruned to bound storage.
-    try {
-      // Normalised, proxy-aware address. Storing the raw handshake address
-      // here was actively dangerous: behind a reverse proxy it recorded the
-      // proxy's IP for every account, so a moderator ticking "also ban IP"
-      // would have banned the proxy and locked every user out. (v3.42.0)
-      const ip = clientIp(socket);
-      if (ip) {
-        db.prepare(`INSERT INTO user_ips (user_id, ip, last_seen) VALUES (?, ?, CURRENT_TIMESTAMP)
-                    ON CONFLICT(user_id, ip) DO UPDATE SET last_seen = CURRENT_TIMESTAMP`)
-          .run(user.id, ip);
-        // Prune to last 5 IPs for this user
-        db.prepare(`DELETE FROM user_ips WHERE user_id = ? AND ip NOT IN (
-                      SELECT ip FROM user_ips WHERE user_id = ? ORDER BY last_seen DESC LIMIT 5
-                    )`).run(user.id, user.id);
+        let anyAdmin = accountDb.prepare('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').get();
+        if (asyncAccountReads) anyAdmin = await anyAdmin;
+        if (!anyAdmin && uRow.username.toLowerCase() === ADMIN_USERNAME && !uRow.is_admin) {
+          if (db.async.kind !== 'sqlite') throw new Error('PostgreSQL admin bootstrap is not migrated yet');
+          uRow.is_admin = require('../adminBootstrap')(db, user.id, ADMIN_USERNAME);
+        }
+        socket.user.isAdmin = !!uRow.is_admin;
+      } catch (err) {
+        // The account could not be checked (revoked? still admin?), so the
+        // connection is refused rather than trusting what the token says.
+        console.warn('[socket] account check failed at connect:', err.message);
+        return next(new Error('Server error, try again'));
       }
+
+      try {
+        const statusRow = db.prepare('SELECT status, status_text FROM users WHERE id = ?').get(user.id);
+        if (statusRow) {
+          const dbStatus = statusRow.status || 'online';
+          if (dbStatus === 'away') {
+            socket.user.status = 'online';
+            socket.user.statusText = statusRow.status_text || '';
+            db.prepare('UPDATE users SET status = ? WHERE id = ?').run('online', user.id);
+          } else {
+            socket.user.status = dbStatus;
+            socket.user.statusText = statusRow.status_text || '';
+          }
+        }
+      } catch { /* status is cosmetic; the user just starts with the default status */ }
+
+      try {
+        socket.user.roles = getUserRoles(user.id);
+        socket.user.effectiveLevel = getUserEffectiveLevel(user.id);
+      } catch { socket.user.roles = []; socket.user.effectiveLevel = socket.user.isAdmin ? 100 : 0; }
+
+      // Record IP for future "ban IP" lookups. Kept to the 5 most-recent
+      // distinct IPs per user; older entries are pruned to bound storage.
+      try {
+        // Normalised, proxy-aware address. Storing the raw handshake address
+        // here was actively dangerous: behind a reverse proxy it recorded the
+        // proxy's IP for every account, so a moderator ticking "also ban IP"
+        // would have banned the proxy and locked every user out. (v3.42.0)
+        const ip = clientIp(socket);
+        if (ip) {
+          db.prepare(`INSERT INTO user_ips (user_id, ip, last_seen) VALUES (?, ?, CURRENT_TIMESTAMP)
+                      ON CONFLICT(user_id, ip) DO UPDATE SET last_seen = CURRENT_TIMESTAMP`)
+            .run(user.id, ip);
+          // Prune to last 5 IPs for this user
+          db.prepare(`DELETE FROM user_ips WHERE user_id = ? AND ip NOT IN (
+                        SELECT ip FROM user_ips WHERE user_id = ? ORDER BY last_seen DESC LIMIT 5
+                      )`).run(user.id, user.id);
+        }
+      } catch (err) {
+        // Never block the connection, but "also ban IP" will not know this
+        // address (throttled, since this runs per connection).
+        throttledWarn('user IP record failed', err);
+      }
+
+      next();
     } catch (err) {
-      // Never block the connection, but "also ban IP" will not know this
-      // address (throttled, since this runs per connection).
-      throttledWarn('user IP record failed', err);
+      console.warn('[socket] authentication check failed:', err.message);
+      next(new Error('Server error, try again'));
     }
-
-    next();
   });
 
   // Clean up connection tracker (every 5 min)
@@ -2427,6 +2210,26 @@ function setupSocketHandlers(io, db, opts = {}) {
     console.log(`✅ ${socket.user.username} connected`);
     socket.currentChannel = null;
     socket.hasFocus = true;
+
+    // (#5875) One tab, one socket. A phone whose link dies does not notice
+    // until the server's ping timeout, and by then the page has already
+    // opened a replacement. The old socket stays in the channel rooms until
+    // that timeout, and a flaky link stacks several of them. The page only
+    // listens on the newest, so close the earlier ones from this same tab
+    // now. A different tab or device sends a different id and is left
+    // alone, as is any client that does not send one.
+    const tabId = socket.handshake && socket.handshake.auth && socket.handshake.auth.tabId;
+    if (typeof tabId === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(tabId)) {
+      socket.tabId = tabId;
+      for (const other of [...io.of('/').sockets.values()]) {
+        if (other === socket || !other.user || other.user.id !== socket.user.id) continue;
+        if (other.tabId !== tabId) continue;
+        console.log(`♻️  ${socket.user.username} replaced a stale socket from the same tab`);
+        try { other.disconnect(true); } catch (err) {
+          console.warn('[socket] could not close the stale tab socket:', err.message);
+        }
+      }
+    }
 
     // (#5518 sibling) Your own open connections, for the session list in
     // Settings. Haven issues stateless tokens and keeps no session table, so
@@ -2947,13 +2750,13 @@ function setupSocketHandlers(io, db, opts = {}) {
       // Broadcast helpers
       broadcastChannelLists, broadcastVoiceUsers, voiceCodesVisibleTo, emitOnlineUsers, emitDmPresence, resetPresenceSync,
       dropRelayUser, closeRelaySources,
-      getEnrichedChannels, handleVoiceLeave, pruneStaleVoiceUsers,
+      getEnrichedChannels, getEnrichedChannelsAsync, handleVoiceLeave, pruneStaleVoiceUsers,
       liveAccess,
       broadcastStreamInfo, touchVoiceActivity, rotateChannelCode, rotatePrivateCodesAfterRemoval,
       // Push / webhooks
       sendPushNotifications, fireWebhookCallbacks, fireWebhookEvent, dmCalls,
       // Ferry (Discord bridge)
-      ferry, ferryLinksFor, parseFerryTarget, ferryRelay, ferryRelayReply,
+      ferry, ferryLinksFor, parseFerryTarget, ferryRelay, ferryRelayReply, ferryReactionChanged,
       // Slash commands
       processSlashCommand,
       // Music helpers
@@ -3009,6 +2812,7 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerFerry(socket, ctx);
     registerGroupE2E(socket, ctx);
     registerTags(socket, ctx);
+    registerChannelTypes(socket, ctx);
     registerMemberDefaults(socket, ctx);
     registerGameActivity(socket, ctx);
     registerMessageHighlights(socket, ctx);
@@ -3019,7 +2823,9 @@ function setupSocketHandlers(io, db, opts = {}) {
     registerForumPictureVotes(socket, ctx);
     registerBadges(socket, ctx);
     registerMoveToThread(socket, ctx);
+    registerChannelAddAll(socket, ctx);
     registerMessageNsfw(socket, ctx);
+    registerBlockedNames(socket, ctx);
 
     // ── Disconnect handler ────────────────────────────────
     // Socket.IO hands us why the socket went away, and throwing that away made

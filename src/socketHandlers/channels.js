@@ -42,11 +42,12 @@ async function releaseChannelUploads(db, byAuthor, label) {
 const { clearChannelRuntimeState } = require('../channelRotation');
 const { reachableChannel } = require('./channelAccess');
 const protectedMessages = require('../protectedMessages');
+const channelTypes = require('../channelTypes');
 
 module.exports = function register(socket, ctx) {
   const {
     io, db, state, userHasPermission, getUserEffectiveLevel,
-    broadcastChannelLists, getEnrichedChannels, emitOnlineUsers, emitDmPresence, resetPresenceSync,
+    broadcastChannelLists, getEnrichedChannels, getEnrichedChannelsAsync, emitOnlineUsers, emitDmPresence, resetPresenceSync,
     handleVoiceLeave, broadcastVoiceUsers, generateUniqueSharedCode,
     logAudit, fireWebhookEvent, enforceAutomod,
     rotateChannelCode, rotatePrivateCodesAfterRemoval, botAudioManager
@@ -145,16 +146,22 @@ module.exports = function register(socket, ctx) {
     userHasPermission(socket.user.id, 'manage_sub_channels', parentId);
 
   // ── Get user's channels ─────────────────────────────────
-  socket.on('get-channels', () => {
-    const channels = getEnrichedChannels(
-      socket.user.id,
-      socket.user.isAdmin,
-      (room) => socket.join(room)
-    );
-    socket.emit('channels-list', channels);
-    // Now in every DM room: let partners know this user is here (#5574).
-    if (emitDmPresence) emitDmPresence(socket.user.id);
-    ctx.dmCalls?.snapshotFor(socket);
+  socket.on('get-channels', async () => {
+    try {
+      const joinRoom = (room) => socket.join(room);
+      // SQLite answers right here with no await, so channels-list keeps its
+      // place ahead of the other replies in the client's startup burst.
+      const channels = db.async?.kind === 'sqlite' || !getEnrichedChannelsAsync
+        ? getEnrichedChannels(socket.user.id, socket.user.isAdmin, joinRoom, null, true)
+        : await getEnrichedChannelsAsync(socket.user.id, socket.user.isAdmin, joinRoom, null, true);
+      socket.emit('channels-list', channels);
+      // Now in every DM room: let partners know this user is here (#5574).
+      if (emitDmPresence) emitDmPresence(socket.user.id);
+      ctx.dmCalls?.snapshotFor(socket);
+    } catch (err) {
+      console.error('Channel list failed:', err.message);
+      socket.emit('error-msg', 'Could not load channels');
+    }
   });
 
   // An Organize tag as stored: trimmed, at most 30 characters, null when
@@ -1135,6 +1142,11 @@ module.exports = function register(socket, ctx) {
 
     try {
       db.prepare(`UPDATE channels SET ${colName} = ? WHERE id = ?`).run(newVal, channel.id);
+      // Changing a function by hand takes the channel out of its type
+      // (src/channelTypes.js), so the type's icon stops showing for it.
+      if (channel.type_id && channelTypes.FUNCTIONS.includes(permission)) {
+        db.prepare('UPDATE channels SET type_id = NULL WHERE id = ?').run(channel.id);
+      }
       // Going private keeps everyone who is already in (#5563), but anyone
       // else who still has the room open on a socket is shown the door now
       // rather than on their next reconnect.
@@ -2035,28 +2047,34 @@ module.exports = function register(socket, ctx) {
     return true;
   }
   ctx.purgeDmChannel = purgeDmChannel;
-  socket.on('delete-dm', async (data) => {
+  socket.on('delete-dm', async (data, callback) => {
+    // An app may pass a reply callback so it can drop the conversation in the
+    // window it deleted from even when the channel-deleted broadcast does not
+    // reach it (a reconnect or server switch around the delete). Apps that
+    // pass no callback keep reading error-msg. (#5848)
+    const done = typeof callback === 'function' ? callback : null;
+    const fail = (msg) => (done ? done({ error: msg }) : socket.emit('error-msg', msg));
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
     // Deleting a DM erases it for everyone in it, so the app must have asked
     // first. An app that sends this from a plain "close" gets refused instead.
     if (data.confirmed !== true) {
-      return socket.emit('error-msg', 'Deleting a conversation removes it for everyone in it. Please update your app so it asks before deleting.');
+      return fail('Deleting a conversation removes it for everyone in it. Please update your app so it asks before deleting.');
     }
     const channel = db.prepare('SELECT * FROM channels WHERE code = ? AND is_dm = 1').get(code);
-    if (!channel) return socket.emit('error-msg', 'DM not found');
+    if (!channel) return fail('DM not found');
     const isMember = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
-    if (!isMember && !socket.user.isAdmin) return socket.emit('error-msg', 'Not authorized');
+    if (!isMember && !socket.user.isAdmin) return fail('Not authorized');
     if (isMember && channel.is_group && ctx.leaveGroupDm) return void (await ctx.leaveGroupDm(code, socket.user.id, data.attachments));
     // An admin outside a group deletes it for everyone, with the same checks and notices as from its menu.
-    if (channel.is_group) return void (ctx.deleteGroupDmForEveryone ? await ctx.deleteGroupDmForEveryone(code, data.attachments) : socket.emit('error-msg', 'Not authorized'));
+    if (channel.is_group) return void (ctx.deleteGroupDmForEveryone ? await ctx.deleteGroupDmForEveryone(code, data.attachments) : fail('Not authorized'));
 
     // An admin deleting a conversation they are not in is on the record.
     const outsiders = isMember ? null : db.prepare(`
       SELECT COALESCE(u.display_name, u.username) AS name FROM channel_members cm JOIN users u ON u.id = cm.user_id WHERE cm.channel_id = ?
     `).all(channel.id).map(r => r.name);
-    if (!(await purgeDmChannel(channel, data.attachments))) return socket.emit('error-msg', protectedMessages.CONVERSATION_REFUSAL);
+    if (!(await purgeDmChannel(channel, data.attachments))) return fail(protectedMessages.CONVERSATION_REFUSAL);
     if (outsiders) {
       _audit({ actor: socket.user, action: 'dm_delete',
         target_type: 'channel', target_id: channel.id, target_name: outsiders.join(', ') });
@@ -2064,5 +2082,7 @@ module.exports = function register(socket, ctx) {
 
     io.to(`channel:${code}`).to(`voice:${code}`).emit('channel-deleted', { code });
     clearChannelRuntimeState(state, code);
+    // The delete is committed, so the app that asked can drop it now.
+    if (done) done({ success: true });
   });
 };

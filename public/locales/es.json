@@ -285,6 +285,7 @@
       "logout": "Cerrar sesión",
       "invite": "Invitar usuarios",
       "change_display_name": "Cambiar nombre visible",
+      "mentions": "Menciones y respuestas",
       "close_sidebar": "Cerrar barra lateral",
       "message_actions": "Acciones del mensaje",
       "organize_channels": "Organizar canales",
@@ -1075,6 +1076,7 @@
     "uploads_disabled": "Las cargas de medios están desactivadas en este canal",
     "soundboard_disabled": "El soundboard está desactivado en este canal",
     "file_too_large": "Archivo demasiado grande (máx. {{maxMb}} MB)",
+    "file_type_blocked": "No se pueden subir archivos .{{ext}} en este servidor",
     "image_too_large": "Imagen demasiado grande (máx. {{maxMb}} MB)",
     "max_images": "Máximo 5 imágenes a la vez",
     "max_files": "Máximo 5 archivos a la vez",
@@ -1601,7 +1603,26 @@
       "debug": "Depuración",
       "backup": "Copia de seguridad",
       "template": "Plantilla del servidor",
-      "audit_log": "Registro de auditoría"
+      "audit_log": "Registro de auditoría",
+      "whats_new": "Novedades"
+    },
+    "pages": {
+      "look": "Apariencia",
+      "chat": "Chat y multimedia",
+      "alerts": "Notificaciones",
+      "profile": "Perfil y actividad",
+      "security": "Cuenta y seguridad",
+      "language": "Idioma",
+      "access": "Accesibilidad",
+      "advanced": "Plugins y avanzado",
+      "server": "Servidor",
+      "people": "Personas y roles",
+      "safety": "Seguridad",
+      "content": "Contenido",
+      "network": "Red y escala",
+      "tools": "Bots y datos",
+      "more": "Más",
+      "more_info": "Más información"
     },
     "localization_section": {
       "title": "Localización"
@@ -2282,6 +2303,9 @@
       "automod_log_channel_placeholder": "código del canal (opcional)",
       "automod_activity_group": "Actividad reciente",
       "automod_refresh": "Actualizar",
+      "automod_ai_group": "Revisión de enlaces con IA (experimental)",
+      "automod_ai_enabled": "Permitir que el plugin AutoMod Quarantine use este servidor",
+      "automod_ai_hint": "Experimental. Desactivado por defecto. Activa la parte de servidor del plugin AutoMod Quarantine: revisar enlaces con un modelo de IA que corre en este servidor (instalado con scripts/setup-automod-ai.sh) y reenviar las peticiones de los moderadores a servicios de IA en la nube que rechazan navegadores. A la IA solo se le envía el enlace, nunca el mensaje. Cada miembro sigue decidiendo si activa el plugin en Plugins y temas.",
       "bulk_preview_failed": "Falló la vista previa",
       "mention_everyone_desc": "Notificar a todos en el canal",
       "mention_here_desc": "Notificar a los miembros en línea",
@@ -2447,7 +2471,6 @@
       "upload_btn": "Subir",
       "remove_btn": "Eliminar",
       "server_banner_hint": "Banner del servidor (ancho, máx. 4 MB)",
-      "server_banner_display_hint": "Los ajustes de visualización del banner (altura, desplazamiento, estilo del encabezado) están en Configuración de usuario.",
       "appearance_welcome": "Apariencia y bienvenida",
       "welcome_message": "Mensaje de bienvenida",
       "welcome_message_placeholder": "p.ej. ¡Bienvenido {user}!",
@@ -2755,6 +2778,9 @@
       "max_avatar_hint": "La foto de perfil, borde o imagen de personaje más grande que alguien puede subir (de 1 a 10 MB, predeterminado 2). Los GIF animados suelen superar los 2 MB, pero cada imagen se carga junto a cada mensaje que envía su dueño, así que mantén este valor lo más bajo posible.",
       "max_emoji_hint": "Tamaño máximo de carga de emoji personalizado (64–1024 KB, predeterminado 256)",
       "max_poll_hint": "Opciones de respuesta máximas por encuesta (2–25, predeterminado 10)",
+      "blocked_upload_types": "Tipos de archivo bloqueados",
+      "blocked_upload_types_hint": "Nadie puede subir archivos de estos tipos. Sepáralos con comas. Algunos de riesgo: exe, msi, bat, cmd, com, scr, ps1, vbs, dll, jar. Déjalo vacío para permitir todos.",
+      "blocked_upload_types_placeholder": "exe, bat, dll",
       "max_message_chars_hint": "Máximo de caracteres por mensaje, publicación o DM (200-100000, predeterminado 2000)",
       "max_invite_uses": "Máximo de usos del enlace de invitación",
       "max_invite_uses_hint": "El número máximo de usos que se puede establecer para un enlace de invitación. Los administradores y usuarios con permiso para gestionar el servidor ignoran este límite. (0 = ilimitado)",
@@ -3150,7 +3176,17 @@
       "blur": "Difuminar temas y mensajes NSFW hasta hacer clic",
       "blur_hint": "Los temas y mensajes marcados con 🔞 quedan tras un difuminado, como un spoiler. Desactiva esto para verlos con claridad."
     },
-    "search_placeholder": "Buscar en configuración (Ctrl+F)"
+    "search_placeholder": "Buscar en configuración (Ctrl+F)",
+    "whats_new": {
+      "title": "Novedades",
+      "show_label": "Mostrar novedades tras",
+      "all": "Cada actualización",
+      "minor": "Funciones nuevas",
+      "major": "Solo grandes actualizaciones",
+      "off": "Nunca",
+      "hint": "Un número de versión tiene tres partes: una gran actualización cambia la primera, las funciones nuevas la segunda y los arreglos la tercera. Cuando cambia una parte subrayada, ves las notas de la versión. Se guarda en este dispositivo.",
+      "show_now": "Ver las novedades de esta versión"
+    }
   },
   "modals": {
     "timezone": {
@@ -3492,7 +3528,9 @@
       "not_here": "Enviar más tarde no está disponible en mensajes directos",
       "scheduled": "Programado para {{when}}",
       "updated": "Actualizado, se enviará a las {{when}}",
-      "sent": "Tu mensaje programado se envió en #{{channel}}"
+      "sent": "Tu mensaje programado se envió en #{{channel}}",
+      "attach": "📎 Adjuntar archivos",
+      "remove_file": "Quitar"
     },
     "self_destruct": {
       "title": "Mensaje autodestructivo",
@@ -3641,7 +3679,7 @@
     "donors": {
       "title": "Gracias",
       "subtitle": "Haven se construye con amor y se mantiene vivo gracias a la generosidad de personas como tú. Cada donación — grande o pequeña — significa el mundo.",
-      "sponsors_title": "Patrocinadores",
+      "sponsors_title": "Colaboradores mensuales",
       "donors_title": "Donantes",
       "note": "Los nuevos donantes se agregarán en cada versión. ¡Si has donado y no ves tu nombre, estará en la próxima actualización!",
       "kofi_btn": "Apoyar Haven en Ko-fi",
@@ -4837,5 +4875,10 @@
       "none": "Aún no hay insignias otorgadas a mano. Crea una en Ajustes, Admin, Insignias.",
       "switched_off": "desactivada"
     }
+  },
+  "whats_new": {
+    "title": "Novedades de Haven {{version}}",
+    "settings_hint": "En Ajustes > Novedades eliges cuándo aparece.",
+    "unavailable": "Las notas de la versión no están disponibles en este servidor."
   }
 }

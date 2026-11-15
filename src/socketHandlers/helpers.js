@@ -245,6 +245,12 @@ function toReplyContext(row) {
   };
 }
 
+// A spoiler stays hidden in a notification. The same pattern the client's
+// renderer uses, which also leaves `||` inside code alone.
+function maskSpoilers(text) {
+  return String(text ?? '').replace(/(```[\s\S]*?```|`[^`\n]+`)|\|\|.+?\|\|/g, (m, code) => code || '▒▒▒');
+}
+
 // ── Role mentions (#5579) ────────────────────────────────────────
 // "@Moderators" pings everyone holding that role, which is @everyone in a
 // smaller hat, so a sender without mention_everyone gets the treatment they
@@ -287,6 +293,7 @@ function releasableUploads(db, relPaths, ownerIds, { ignoreMessagesAfter = null 
       OR EXISTS(SELECT 1 FROM custom_sounds WHERE filename = @f)
       OR EXISTS(SELECT 1 FROM custom_emojis WHERE filename = @f)
       OR EXISTS(SELECT 1 FROM stickers WHERE filename = @f)
+      OR EXISTS(SELECT 1 FROM scheduled_messages WHERE instr(content, @p) > 0)
   `);
   const out = [];
   for (const relPath of new Set(relPaths || [])) {
@@ -331,16 +338,15 @@ function validEscalation(raw) {
 // limited.
 const NEW_DMS_PER_HOUR = 20;
 const CHANNEL_NAME_RE = /^[\w\s\-!?.,'&+\p{L}\p{M}\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Emoji}\uFE0F\u200D]+$/u;
-// A role menu (self-assign roles): the emoji each role is picked with, and
-// the message text the menu is posted with.
-const ROLE_MENU_EMOJI_RE = /^[\p{Emoji}\p{Emoji_Component}\uFE0F\u200D]{1,8}$/u;
+// A role menu (self-assign roles): the message text it is posted with. Its
+// emoji are checked in src/builtinEmojis.js.
 function roleMenuContent(title, entries) {
   return [title ? `🎭 ${title}` : '🎭 Pick your roles', ...entries.map(e => `${e.emoji}  ${e.name}`)].join('\n');
 }
 module.exports = {
   utcStamp, isString, isInt, sanitizeText, sanitizeSoundName, isValidUploadPath, normalizeDisplayName,
-  sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE, ROLE_MENU_EMOJI_RE, roleMenuContent,
+  sanitizeBorderTransform, parseBorderTransform, VALID_ROLE_PERMS, ADMIN_ONLY_PERMS, CHANNEL_NAME_RE, roleMenuContent,
   normalizeWordGroups, validEscalation, filterIdleOnline,
-  replyAuthorUsername, toReplyContext, stripRoleMentions, releasableUploads,
+  replyAuthorUsername, toReplyContext, stripRoleMentions, releasableUploads, maskSpoilers,
   NEW_DMS_PER_HOUR,
 };

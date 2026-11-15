@@ -52,26 +52,34 @@ _initMusicFilePlayer(audio, volume) {
     setVolume: (v) => { audio.volume = Math.max(0, Math.min(100, Number(v) || 0)) / 100; },
   };
   player.setVolume(volume);
+  // A replaced or stopped <audio> still fires its pause (and sometimes other
+  // events) a moment later. Only the current one may report, or skipping a
+  // track would send a pause that stops the next one for everyone.
+  const current = () => this._musicFileAudio === audio;
   audio.addEventListener('loadedmetadata', () => {
+    if (!current()) return;
     this._musicFilePlayer = player;
     this._startMusicTimeTracking();
     this._flushPendingMusicSyncState();
   }, { once: true });
   // The same reports YouTube's player gives through onStateChange.
   audio.addEventListener('play', () => {
+    if (!current()) return;
     this._setMusicPlayingUi(true);
     if (!this._shouldSuppressMusicBroadcasts()) this._emitMusicControl('play');
   });
   audio.addEventListener('pause', () => {
-    if (audio.ended) return;
+    if (!current() || audio.ended) return;
     this._setMusicPlayingUi(false);
     if (!this._shouldSuppressMusicBroadcasts()) this._emitMusicControl('pause');
   });
   audio.addEventListener('ended', () => {
+    if (!current()) return;
     this._setMusicPlayingUi(false);
     this._emitMusicFinished();
   });
   audio.addEventListener('error', () => {
+    if (!current()) return;
     this._setMusicActivityHint(t('voice.music_file_failed'));
     this._showToast(t('voice.music_file_failed'), 'error');
   });
@@ -88,7 +96,7 @@ _stopMusicFilePlayer() {
 // "Play for everyone in voice" on an uploaded audio file.
 _musicListenHtml(fileUrl, fileName) {
   if (!this._isMusicFileUrl(fileUrl)) return '';
-  return `<button type="button" class="media-listen" data-url="${this._escapeHtml(fileUrl)}" data-title="${this._escapeHtml(fileName || '')}" title="${t('voice.music_file_listen')}" aria-label="${t('voice.music_file_listen')}">🎶</button>`;
+  return `<button type="button" class="media-btn media-listen" data-url="${this._escapeHtml(fileUrl)}" data-title="${this._escapeHtml(fileName || '')}" title="${t('voice.music_file_listen')}" aria-label="${t('voice.music_file_listen')}">${this._mediaIcon('music')}</button>`;
 },
 
 _setupMusicListenButtons() {

@@ -256,6 +256,7 @@
       "logout": "ログアウト",
       "invite": "ユーザーを招待",
       "change_display_name": "表示名を変更",
+      "mentions": "メンションと返信",
       "close_sidebar": "サイドバーを閉じる",
       "message_actions": "メッセージの操作",
       "organize_channels": "チャンネルを整理",
@@ -950,6 +951,7 @@
     "uploads_disabled": "このチャンネルではメディアのアップロードが無効になっています",
     "soundboard_disabled": "このチャンネルではサウンドボードがオフになっています",
     "file_too_large": "ファイルが大きすぎます（最大 {{maxMb}} MB）",
+    "file_type_blocked": "このサーバーでは .{{ext}} ファイルをアップロードできません",
     "image_too_large": "画像が大きすぎます（最大 {{maxMb}} MB）",
     "max_images": "一度に送れる画像は最大 5 枚です",
     "max_files": "一度に送れるファイルは最大 5 個です",
@@ -1419,7 +1421,26 @@
       "tunnel": "トンネル",
       "bots": "ボット",
       "import": "インポート",
-      "mod_mode": "モデレーターモード"
+      "mod_mode": "モデレーターモード",
+      "whats_new": "新着情報"
+    },
+    "pages": {
+      "look": "外観",
+      "chat": "チャットとメディア",
+      "alerts": "通知",
+      "profile": "プロフィールとアクティビティ",
+      "security": "アカウントとセキュリティ",
+      "language": "言語",
+      "access": "アクセシビリティ",
+      "advanced": "プラグインと詳細",
+      "server": "サーバー",
+      "people": "メンバーとロール",
+      "safety": "安全",
+      "content": "コンテンツ",
+      "network": "ネットワークと規模",
+      "tools": "ボットとデータ",
+      "more": "その他",
+      "more_info": "詳細"
     },
     "language_section": {
       "title": "言語",
@@ -1695,6 +1716,9 @@
       "max_sound_hint": "サウンドボードの最大アップロードサイズ(256-10240 KB、デフォルト 1024 / 1 MB)",
       "max_emoji_hint": "カスタム絵文字の最大アップロードサイズ(64-1024 KB、デフォルト 256)",
       "max_poll_hint": "投票ごとの最大選択肢数(2-25、デフォルト 10)",
+      "blocked_upload_types": "ブロックするファイル形式",
+      "blocked_upload_types_hint": "これらの形式のファイルは誰もアップロードできません。カンマで区切ってください。よくある危険な形式: exe, msi, bat, cmd, com, scr, ps1, vbs, dll, jar。空欄ならすべて許可します。",
+      "blocked_upload_types_placeholder": "exe, bat, dll",
       "max_message_chars_hint": "メッセージ、投稿、DM ごとの最大文字数(200-100000、デフォルト 2000)",
       "sounds_hint": "カスタム通知音用の音声ファイルをアップロードします",
       "emojis_hint": "サーバーのカスタム絵文字用の画像をアップロードします",
@@ -1873,6 +1897,16 @@
         "twemoji": "Twemoji",
         "hint": "Twemoji はどのデバイスでも同じ絵文字を表示します。フォントは Haven 自身が配信します。"
       }
+    },
+    "whats_new": {
+      "title": "新着情報",
+      "show_label": "新着情報を表示するタイミング",
+      "all": "すべての更新",
+      "minor": "新機能",
+      "major": "大型アップデートのみ",
+      "off": "表示しない",
+      "hint": "バージョン番号は3つの部分からなります。大型アップデートで1つ目、新機能で2つ目、修正で3つ目が変わります。下線の部分が変わると、リリースノートが表示されます。この端末に保存されます。",
+      "show_now": "このバージョンの新着情報を見る"
     }
   },
   "modals": {
@@ -2167,7 +2201,7 @@
     "donors": {
       "title": "ありがとうございます",
       "subtitle": "Haven は愛情を込めて作られ、皆さんのような方々の寛大なご支援によって支えられています。金額の大小にかかわらず、すべての寄付がとても大きな意味を持っています。",
-      "sponsors_title": "スポンサー",
+      "sponsors_title": "毎月のサポーター",
       "donors_title": "寄付者",
       "note": "新しい寄付者はリリースごとに追加されます。寄付したのに名前が見当たらない場合は、次のアップデートで掲載されます！",
       "kofi_btn": "Ko-fi で Haven を支援",
@@ -2355,6 +2389,10 @@
       "desc": "移動先のチャンネルを選択してください",
       "move_one": "{{n}}件のメッセージの移動先:",
       "move_many": "{{n}}件のメッセージの移動先:"
+    },
+    "schedule": {
+      "attach": "📎 ファイルを添付",
+      "remove_file": "削除"
     }
   },
   "context_menu": {
@@ -2971,5 +3009,10 @@
     "days_ago": "{{n}}日前",
     "tags_editor_title": "フォーラムタグ",
     "tags_editor_hint": "1行に1つのタグ。絵文字を付けたい場合は先頭に置きます（例:「🎨 アート」）。最大20個。"
+  },
+  "whats_new": {
+    "title": "Haven {{version}} の新着情報",
+    "settings_hint": "設定 > 新着情報 で表示するタイミングを選べます。",
+    "unavailable": "このサーバーではリリースノートを利用できません。"
   }
 }

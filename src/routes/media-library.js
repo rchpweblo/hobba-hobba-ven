@@ -73,19 +73,21 @@ module.exports = function registerMediaLibrary(deps) {
     });
   });
 
-  app.get('/api/sounds', (req, res) => {
+  app.get('/api/sounds', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
-    const user = token ? verifyToken(token) : null;
+    const user = req.postgresUser || (token ? verifyToken(token) : null);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
-    const { getDb } = require('../database');
+    const { getAsyncDb } = require('../database');
     try {
-      const disabledRows = getDb().prepare('SELECT name FROM disabled_builtin_sounds').all();
+      const db = getAsyncDb();
+      const disabledRows = await db.prepare('SELECT name FROM disabled_builtin_sounds').all();
       const disabledSet = new Set(disabledRows.map(r => r.name));
       const enabledBuiltins = BUILTIN_SOUNDS.filter(s => !disabledSet.has(s.name));
-      const custom = getDb().prepare('SELECT name, filename FROM custom_sounds ORDER BY name').all();
+      const custom = await db.prepare('SELECT name, filename FROM custom_sounds ORDER BY name').all();
       const customList = custom.map(s => ({ name: s.name, url: `/uploads/${s.filename}` }));
       // Each sound's soundboard volume (#5804), sent only where it is not 100.
-      const volumes = new Map(getDb().prepare('SELECT sound_name, volume FROM sound_volumes').all().map(r => [r.sound_name, r.volume]));
+      const volumeRows = await db.prepare('SELECT sound_name, volume FROM sound_volumes').all();
+      const volumes = new Map(volumeRows.map(r => [r.sound_name, r.volume]));
       const withVolume = (s) => (volumes.has(s.name) && volumes.get(s.name) !== 100 ? { ...s, volume: volumes.get(s.name) } : s);
       res.json({ sounds: [...enabledBuiltins, ...customList].map(withVolume) });
     } catch { res.json({ sounds: [...BUILTIN_SOUNDS] }); }
@@ -168,13 +170,13 @@ module.exports = function registerMediaLibrary(deps) {
   });
 
   // -- User sound preferences ---------------------------------------------------
-  app.get('/api/user-sound-prefs', (req, res) => {
+  app.get('/api/user-sound-prefs', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
-    const user = token ? verifyToken(token) : null;
+    const user = req.postgresUser || (token ? verifyToken(token) : null);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
-    const { getDb } = require('../database');
+    const { getAsyncDb } = require('../database');
     try {
-      const rows = getDb().prepare('SELECT sound_name, hidden, custom_order FROM sound_preferences WHERE user_id = ?').all(user.id);
+      const rows = await getAsyncDb().prepare('SELECT sound_name, hidden, custom_order FROM sound_preferences WHERE user_id = ?').all(user.id);
       const prefs = {};
       rows.forEach(r => { prefs[r.sound_name] = { hidden: !!r.hidden, customOrder: r.custom_order }; });
       res.json({ prefs });
@@ -276,13 +278,13 @@ module.exports = function registerMediaLibrary(deps) {
     });
   });
 
-  app.get('/api/emojis', (req, res) => {
+  app.get('/api/emojis', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
-    const user = token ? verifyToken(token) : null;
+    const user = req.postgresUser || (token ? verifyToken(token) : null);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
-    const { getDb } = require('../database');
+    const { getAsyncDb } = require('../database');
     try {
-      const emojis = getDb().prepare('SELECT name, filename FROM custom_emojis ORDER BY name').all();
+      const emojis = await getAsyncDb().prepare('SELECT name, filename FROM custom_emojis ORDER BY name').all();
       res.json({ emojis: emojis.map(e => ({ name: e.name, url: `/uploads/${e.filename}` })) });
     } catch { res.json({ emojis: [] }); }
   });
@@ -291,7 +293,7 @@ module.exports = function registerMediaLibrary(deps) {
   // with the OS font. Falls back to the client's built-in list when unavailable.
   app.get('/api/standard-emojis', (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
-    if (!token || !verifyToken(token)) return res.status(401).json({ error: 'Unauthorized' });
+    if (!req.postgresUser && (!token || !verifyToken(token))) return res.status(401).json({ error: 'Unauthorized' });
     res.json(require('../emoji').getEmojiData() || { categories: {}, names: {}, modifierBase: [] });
   });
 

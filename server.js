@@ -1,3 +1,4 @@
+(async () => {
 // ── Resolve data directory BEFORE loading .env ────────────
 const { DATA_DIR, DB_PATH, ENV_PATH, CERTS_DIR, UPLOADS_DIR, DELETED_ATTACHMENTS_DIR, GAMES_ROMS_DIR } = require('./src/paths');
 const { purgeDeletedAttachments, resolveDeletedRetentionDays } = require('./src/deletedAttachments');
@@ -134,7 +135,7 @@ if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
 const vapidEmail = process.env.VAPID_EMAIL || 'mailto:admin@haven.local';
 webpush.setVapidDetails(vapidEmail, process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
 
-const { initDatabase } = require('./src/database');
+const { initDatabaseAsync } = require('./src/database');
 const { router: authRoutes, authLimiter, verifyToken } = require('./src/auth');
 const { setupSocketHandlers, sanitizeText, sanitizeSoundName, sanitizeBorderTransform, toReplyContext } = require('./src/socketHandlers');
 const { initFerry, stopFerry } = require('./src/ferry');
@@ -419,6 +420,19 @@ app.set('trust proxy', trustProxySetting());
 const _clientIp = require('./src/clientIp');
 let _ipBanCache = { set: new Set(), cidrs: [], expires: 0 };
 function _refreshIpBanCache() {
+  const current = require('./src/database').getDb();
+  if (current?.kind === 'postgres') return current.prepare('SELECT ip FROM ip_bans').all().then(rows => {
+    const set = new Set(), cidrs = [];
+    for (const row of rows) {
+      if (!row.ip) continue;
+      if (row.ip.includes('/')) cidrs.push(row.ip);
+      else set.add(_clientIp.normalizeIp(row.ip));
+    }
+    _ipBanCache = { set, cidrs, expires: Date.now() + 30000 };
+  }).catch(err => {
+    console.warn('[ip-bans] Could not read the ban list, keeping the last one:', err.code || err.message);
+    _ipBanCache = { ..._ipBanCache, expires: Date.now() + 5000 };
+  });
   try {
     const { getDb } = require('./src/database');
     const rows = getDb().prepare('SELECT ip FROM ip_bans').all();
@@ -644,6 +658,7 @@ app.disable('x-powered-by');
 // where appropriate. (#5347 v3.15.7)
 app.use(express.json({ limit: '128kb' }));
 app.use(express.urlencoded({ extended: false, limit: '128kb' }));
+require('./src/db/postgres/http').installPostgresPreviewHttp(app);
 
 // ── Self-hosted fonts (long-lived cache) ─────────────────
 // Fonts never change for a given filename, so let clients cache them for a
@@ -752,11 +767,11 @@ app.get('/api/plugins', (req, res) => {
 });
 
 // API: list available themes (*.theme.css files)
-app.get('/api/themes', (req, res) => {
+app.get('/api/themes', async (req, res) => {
   try {
     let published = [];
     try {
-      const row = db.prepare("SELECT value FROM server_settings WHERE key = 'published_themes'").get();
+      const row = await db.async.prepare("SELECT value FROM server_settings WHERE key = 'published_themes'").get();
       if (row) {
         const stored = JSON.parse(row.value);
         if (Array.isArray(stored)) published = stored;
@@ -940,82 +955,7 @@ app.delete('/api/push/subscribe', express.json(), (req, res) => {
   }
 });
 
-// ── Per-user channel notification prefs ──────────────────
-// Mirrors the localStorage `haven_muted_channels` set to the database so
-// sendPushNotifications can filter out muted recipients before they hit
-// FCM/web-push (#5399 follow-up: mobile users were getting pushes for
-// every message regardless of channel mute state because the prefs only
-// ever lived client-side).
-app.get('/api/user/channel-prefs', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  try {
-    const { getDb } = require('./src/database');
-    const rows = getDb().prepare(
-      'SELECT channel_code FROM user_channel_prefs WHERE user_id = ? AND muted = 1'
-    ).all(user.id);
-    res.json({ muted: rows.map(r => r.channel_code) });
-  } catch (err) {
-    console.error('[user/channel-prefs GET]', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-app.post('/api/user/channel-prefs/mute', express.json({ limit: '4kb' }), (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  const { code, muted } = req.body || {};
-  if (typeof code !== 'string' || !code.length || code.length > 64)
-    return res.status(400).json({ error: 'Invalid code' });
-  try {
-    const { getDb } = require('./src/database');
-    getDb().prepare(`
-      INSERT INTO user_channel_prefs (user_id, channel_code, muted, updated_at)
-      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(user_id, channel_code) DO UPDATE SET
-        muted = excluded.muted,
-        updated_at = CURRENT_TIMESTAMP
-    `).run(user.id, code, muted ? 1 : 0);
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('[user/channel-prefs POST]', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Bulk replace: used by the client on first sync to push the entire
-// localStorage set up at once (or to converge after offline edits).
-app.put('/api/user/channel-prefs/muted', express.json({ limit: '16kb' }), (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  const codes = Array.isArray(req.body?.codes) ? req.body.codes : null;
-  if (!codes || codes.length > 500)
-    return res.status(400).json({ error: 'codes array required (max 500)' });
-  // Filter to plausible channel codes only: strings, 1..64 chars
-  const clean = codes.filter(c => typeof c === 'string' && c.length > 0 && c.length <= 64);
-  try {
-    const { getDb } = require('./src/database');
-    const db = getDb();
-    const tx = db.transaction((uid, list) => {
-      db.prepare('DELETE FROM user_channel_prefs WHERE user_id = ? AND muted = 1').run(uid);
-      const ins = db.prepare(`
-        INSERT INTO user_channel_prefs (user_id, channel_code, muted, updated_at)
-        VALUES (?, ?, 1, CURRENT_TIMESTAMP)
-        ON CONFLICT(user_id, channel_code) DO UPDATE SET
-          muted = 1, updated_at = CURRENT_TIMESTAMP
-      `);
-      for (const c of list) ins.run(uid, c);
-    });
-    tx(user.id, clean);
-    res.json({ ok: true, count: clean.length });
-  } catch (err) {
-    console.error('[user/channel-prefs PUT]', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+require('./src/routes/channel-prefs')({ app, verifyToken });
 
 // ── ICE servers endpoint (STUN + optional TURN) ──────────
 // Bizarre Bazaar fork: TURN_URL may list several addresses, comma-separated,
@@ -1169,7 +1109,7 @@ require('./src/routes/profile')({ uploadDiskGuard, app, recordUploadOwnership, r
 // address should not be handed the server's public hostname.
 app.get('/api/connection-address', (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
-  const user = token ? verifyToken(token) : null;
+  const user = req.postgresUser || (token ? verifyToken(token) : null);
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
   try {
     const tunnel = getTunnelStatus();
@@ -1267,32 +1207,7 @@ app.get('/api/donors', (req, res) => {
   }
 });
 
-// ── Health check (CORS allowed for multi-server status pings) ──
-app.get('/api/health', (req, res) => {
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
-  res.set('Vary', 'Origin');
-  let name = process.env.SERVER_NAME || 'Haven';
-  let icon = null;
-  let fingerprint = null;
-  try {
-    const { getDb } = require('./src/database');
-    const db = getDb();
-    const row = db.prepare("SELECT value FROM server_settings WHERE key = 'server_name'").get();
-    if (row && row.value) name = row.value;
-    const iconRow = db.prepare("SELECT value FROM server_settings WHERE key = 'server_icon'").get();
-    if (iconRow && iconRow.value) icon = iconRow.value;
-    const fpRow = db.prepare("SELECT value FROM server_settings WHERE key = 'server_fingerprint'").get();
-    if (fpRow && fpRow.value) fingerprint = fpRow.value;
-  } catch { /* frequent unauthenticated ping: answer with the env defaults rather than fail or log */ }
-  res.json({
-    status: 'online',
-    name,
-    icon,
-    fingerprint
-    // version intentionally omitted: don't fingerprint the server for attackers
-  });
-});
+require('./src/routes/health')({ app });
 
 // ── Version endpoint (for update checker, authenticated users only) ──
 app.get('/api/version', (req, res) => {
@@ -1303,20 +1218,20 @@ app.get('/api/version', (req, res) => {
 // ── Public config (unauthenticated: safe, read-only aesthetics) ──
 // Returns the admin-configured default theme so the login page can match
 // the server's look for first-time visitors who have no localStorage preference.
-app.get('/api/public-config', (req, res) => {
+app.get('/api/public-config', async (req, res) => {
   try {
     const { getDb } = require('./src/database');
-    const db = getDb();
-    const themeRow = db.prepare("SELECT value FROM server_settings WHERE key = 'default_theme'").get();
-    const publishedThemesRow = db.prepare("SELECT value FROM server_settings WHERE key = 'published_themes'").get();
-    const localeRow = db.prepare("SELECT value FROM server_settings WHERE key = 'default_locale'").get();
-    const titleRow = db.prepare("SELECT value FROM server_settings WHERE key = 'server_title'").get();
-    const tosRow = db.prepare("SELECT value FROM server_settings WHERE key = 'custom_tos'").get();
-    const nameRow = db.prepare("SELECT value FROM server_settings WHERE key = 'server_name'").get();
-    const iconRow = db.prepare("SELECT value FROM server_settings WHERE key = 'server_icon'").get();
-    const adminPwResetRow = db.prepare("SELECT value FROM server_settings WHERE key = 'admin_password_reset_enabled'").get();
-    const loginSetting = (k) => db.prepare('SELECT value FROM server_settings WHERE key = ?').get(k)?.value || '';
-    const oidcConfig = require('./src/oidc').getOidcConfig();
+    const db = getDb().async;
+    const themeRow = await db.prepare("SELECT value FROM server_settings WHERE key = 'default_theme'").get();
+    const publishedThemesRow = await db.prepare("SELECT value FROM server_settings WHERE key = 'published_themes'").get();
+    const localeRow = await db.prepare("SELECT value FROM server_settings WHERE key = 'default_locale'").get();
+    const titleRow = await db.prepare("SELECT value FROM server_settings WHERE key = 'server_title'").get();
+    const tosRow = await db.prepare("SELECT value FROM server_settings WHERE key = 'custom_tos'").get();
+    const nameRow = await db.prepare("SELECT value FROM server_settings WHERE key = 'server_name'").get();
+    const iconRow = await db.prepare("SELECT value FROM server_settings WHERE key = 'server_icon'").get();
+    const adminPwResetRow = await db.prepare("SELECT value FROM server_settings WHERE key = 'admin_password_reset_enabled'").get();
+    const loginSetting = async (k) => (await db.prepare('SELECT value FROM server_settings WHERE key = ?').get(k))?.value || '';
+    const oidcConfig = db.kind === 'postgres' ? { enabled: false } : require('./src/oidc').getOidcConfig();
     let storedPublishedThemes = [];
     try { storedPublishedThemes = JSON.parse(publishedThemesRow?.value || '[]'); } catch { /* malformed setting: treat as no published themes */ }
     const publishedThemes = compatibleThemeFiles(THEMES_DIR, storedPublishedThemes);
@@ -1330,10 +1245,10 @@ app.get('/api/public-config', (req, res) => {
       server_name: nameRow?.value || process.env.SERVER_NAME || '',
       server_icon: iconRow?.value || '',
       // The login page's look (#5819), all of it shown to anyone who visits.
-      login_logo: loginSetting('login_show_icon') === 'true' ? (iconRow?.value || '') : '',
-      login_background: loginSetting('login_show_banner') === 'true' ? loginSetting('server_banner') : '',
-      login_message: loginSetting('login_message'),
-      login_css: loginSetting('login_css'),
+      login_logo: (await loginSetting('login_show_icon')) === 'true' ? (iconRow?.value || '') : '',
+      login_background: (await loginSetting('login_show_banner')) === 'true' ? await loginSetting('server_banner') : '',
+      login_message: await loginSetting('login_message'),
+      login_css: await loginSetting('login_css'),
       // Surface security-relevant settings users may want to know about
       // before signing up (issue #5300). Allowing a user to *see* whether
       // an admin can reset their password is the trust-and-warning half
@@ -1701,6 +1616,9 @@ app.get('/api/gif/trending', gifLimiter, (req, res) => {
 // ── Link previews and the media proxy: src/routes/link-preview.js ──
 require('./src/routes/link-preview')({ app });
 
+// ── Release notes for the "What's new" popup: src/routes/changelog.js ──
+require('./src/routes/changelog')({ app, verifyToken });
+
 // ── Games list endpoint: discover available games ──
 app.get('/api/games', (req, res) => {
   const gamesDir = path.join(__dirname, 'public', 'games');
@@ -1776,6 +1694,15 @@ const webhookLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { erro
 const webhookAudioLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, message: { error: 'Audio rate limit exceeded' } });
 const webhookAudioControlLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: 'Audio control rate limit exceeded' } });
 const botAudioPlaybackLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, message: { error: 'Audio playback rate limit exceeded' } });
+// Opening a webhook URL in a browser sends a GET, which used to fall through
+// to the generic "Not found" and read as a broken webhook. Say how to use it
+// instead. The token is not looked up, so this tells nobody whether it exists.
+app.get('/api/webhooks/:token', webhookLimiter, (req, res) => {
+  res.set('Allow', 'POST').status(405).json({
+    error: 'Webhooks take POST requests, so opening this link in a browser will not work. Send a POST with a JSON body like {"content": "Hello"}. See "Bot & Webhook Developer Guide" in GUIDE.md.'
+  });
+});
+
 app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' }), (req, res) => {
   const { getDb } = require('./src/database');
   const db = getDb();
@@ -1944,6 +1871,13 @@ app.post('/api/webhooks/:token', webhookLimiter, express.json({ limit: '64kb' })
       channelCode: webhook.channel_code,
       message
     });
+    // Phones, and browsers with push on, are told as for a member's message.
+    // Bot posts never pushed, and a browser with push on leaves its pop-ups
+    // to the push, so those people heard nothing at all.
+    if (socketRuntime?.sendPushNotifications) {
+      socketRuntime.sendPushNotifications(webhook.channel_id, webhook.channel_code, webhook.channel_name, 0, username, content,
+        { silent, replyToUserId: replyContext?.user_id || undefined });
+    }
   }
 
   res.status(200).json({ success: true, message_id: result.lastInsertRowid, ...(threadId ? { thread_id: threadId } : {}) });
@@ -2585,7 +2519,8 @@ app.post('/api/moderation/mute', modLimiter, express.json({ limit: '16kb' }), (r
 
   // Same ceiling as the app: 30 days.
   const durationMs = Number.isInteger(duration) && duration > 0 ? Math.min(duration, 43200) * 60 * 1000 : 10 * 60 * 1000;
-  const expiresAt = new Date(Date.now() + durationMs).toISOString();
+  // SQLite's own time format, which every mute check compares against.
+  const expiresAt = new Date(Date.now() + durationMs).toISOString().slice(0, 19).replace('T', ' ');
   const safeReason = typeof reason === 'string' ? reason.trim().slice(0, 200) : '';
 
   db.prepare('DELETE FROM mutes WHERE user_id = ?').run(userId);
@@ -2647,6 +2582,11 @@ app.get('/api/moderation/mutes', modLimiter, (req, res) => {
   `).all();
   res.json({ mutes });
 });
+const automod = require('./src/routes/automodRelay')({
+  app, getModUser, verifyToken, rateLimit,
+  isBanned: (userId) => !!require('./src/database').getDb().prepare('SELECT 1 FROM bans WHERE user_id = ?').get(userId),
+});
+
 
 // ═══════════════════════════════════════════════════════════
 // BOT SLASH COMMANDS API
@@ -2856,7 +2796,8 @@ app.post('/api/webhooks/:token/moderation/mute', webhookLimiter, express.json({ 
 
   // Same ceiling as the app: 30 days.
   const durationMs = Number.isInteger(duration) && duration > 0 ? Math.min(duration, 43200) * 60 * 1000 : 10 * 60 * 1000;
-  const expiresAt = new Date(Date.now() + durationMs).toISOString();
+  // SQLite's own time format, which every mute check compares against.
+  const expiresAt = new Date(Date.now() + durationMs).toISOString().slice(0, 19).replace('T', ' ');
   const safeReason = typeof reason === 'string' ? reason.trim().slice(0, 200) : '';
 
   db.prepare('DELETE FROM mutes WHERE user_id = ?').run(userId);
@@ -3143,7 +3084,8 @@ const io = new Server(server, {
 });
 
 // Initialize
-const db = initDatabase();
+const db = await initDatabaseAsync();
+const postgresPreview = db.kind === 'postgres';
 
 // (#5335) Seed starter stickers now that the DB is ready.
 
@@ -3151,18 +3093,25 @@ const db = initDatabase();
 // Opt-in: off unless the admin enables it or UNICODE_EMOJI_AUTO_UPDATE forces it.
 {
   const emoji = require('./src/emoji');
-  const row = db.prepare("SELECT value FROM server_settings WHERE key = 'unicode_emoji_auto_update'").get();
+  const row = await db.async.prepare("SELECT value FROM server_settings WHERE key = 'unicode_emoji_auto_update'").get();
   emoji.ensureEmojiData(emoji.autoUpdateEnabled(row?.value));
 }
 
 // Load the admin-configured Referrer-Policy into the in-memory cache.
 try {
-  const rp = db.prepare("SELECT value FROM server_settings WHERE key = 'referrer_policy'").get()?.value;
+  const rp = (await db.async.prepare("SELECT value FROM server_settings WHERE key = 'referrer_policy'").get())?.value;
   if (rp && VALID_REFERRER_POLICIES.includes(rp)) currentReferrerPolicy = rp;
 } catch (err) {
   console.warn(`[security] Could not load the saved Referrer-Policy, using ${DEFAULT_REFERRER_POLICY}:`, err.message);
 }
 
+if (postgresPreview) {
+  console.log('[db] PostgreSQL browser preview: signup, login and public-room browsing are enabled; unsupported actions and background integrations are disabled.');
+  await _refreshIpBanCache();
+  app.set('io', io);
+  setFcmAdminEnabled(false);
+  socketRuntime = require('./src/socketHandlers/postgresPreview').setupPostgresPreview(io, db, { isIpBanned });
+} else {
 // ── Admin password reset (one-time, from .env) ───────────
 // Set ADMIN_RESET_PASSWORD in .env, restart, and it resets the admin's password.
 // The variable is removed from .env automatically after use.
@@ -3231,6 +3180,7 @@ socketRuntime = setupSocketHandlers(io, db, {
   onReferrerPolicyChange: (v) => { if (VALID_REFERRER_POLICIES.includes(v)) currentReferrerPolicy = v; }
 });
 activityRef.engine = socketRuntime.activity;
+automod.attachSweep(io);
 require('./src/httpAudit').setAuditSink(socketRuntime.logAudit);
 require('./src/selfDestruct').start({ db, io, UPLOAD_PATH_RE, moveUploadToDeleted: storage.softDelete, removeUpload: storage.remove });
 
@@ -3445,6 +3395,8 @@ initFerry({
   }
 });
 
+}
+
 registerProcessCleanup();
 // Close the Discord socket deliberately on shutdown. Without this a container
 // restart leaves Discord holding a session it will keep feeding for a minute.
@@ -3453,7 +3405,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
 }
 
 // ── Auto-cleanup, auto-backup, dynamic DNS and updates: src/routes/maintenance.js ──
-require('./src/routes/maintenance')({ app, UPLOAD_PATH_RE, isSafeUploadRelPath, moveUploadToDeleted: storage.softDelete, verifyAdminFromDb, buildBackupFile, db, late });
+if (!postgresPreview) require('./src/routes/maintenance')({ app, UPLOAD_PATH_RE, isSafeUploadRelPath, moveUploadToDeleted: storage.softDelete, verifyAdminFromDb, buildBackupFile, db, late });
 
 // ── Catch-all: 404 ──────────────────────────────────────
 // Must be registered AFTER every app.get/post/etc. handler. Express
@@ -3682,16 +3634,16 @@ ${row('Admin:', process.env.ADMIN_USERNAME || 'admin')}
   }
   // Tunnel is now started manually via the admin panel button (no auto-start)
   // Dynamic DNS auto-updater (kicks in only if DDNS_PROVIDER is set in .env)
-  try { startDdns(); } catch (err) { console.warn('[ddns] failed to start:', err && err.message); }
+  try { if (!postgresPreview) startDdns(); } catch (err) { console.warn('[ddns] failed to start:', err && err.message); }
 }
 
 // Storage has to answer before anything is served. One that cannot be used
 // stops the server here instead of leaving it up with no media; the explicit
 // exit matters, because the rejection handler above keeps the process alive.
-storage.prepare(db).then(() => {
-  seedStarterStickers();   // catches and logs its own errors
+(postgresPreview ? storage.ping() : storage.prepare(db)).then(() => {
+  if (!postgresPreview) seedStarterStickers();   // catches and logs its own errors
   server.listen(PORT, HOST, onListening);
-  storage.keepIndexed(db);
+  if (!postgresPreview) storage.keepIndexed(db);
 }, (err) => {
   console.error(`\n❌ Haven could not start: ${err.message}`);
   logCrash('Storage unavailable (exiting)', err);
@@ -3706,10 +3658,13 @@ function gracefulShutdown(signal) {
   botAudioManager?.shutdown();
   require('./src/mediaTools').stopExiftool();
   io.close();
-  const finish = () => {
+  let finishing = false;
+  const finish = async () => {
+    if (finishing) return;
+    finishing = true;
     // Closing the database writes out its journal, so the next start does
     // not have to replay it.
-    try { db.close(); } catch (err) { console.warn('[shutdown] database close failed:', err.message); }
+    try { await db.close(); } catch (err) { console.warn('[shutdown] database close failed:', err.message); }
     process.exit(0);
   };
   server.close(finish);
@@ -3724,3 +3679,10 @@ late.shutdown = (reason) => {
   try { stopFerry(); } catch { /* shutting down anyway; Discord drops the session on its own */ }
   gracefulShutdown(reason);
 };
+
+})().catch(err => {
+  // The whole reason, for whoever has to fix it: a bare code such as
+  // MODULE_NOT_FOUND says nothing. A database address can hold a password.
+  console.error('Haven could not start:', String(err.stack || err.message).replace(/\/\/[^@\s/]+@/g, '//***@'));
+  process.exit(1);
+});

@@ -285,6 +285,7 @@
       "logout": "Wyloguj się",
       "invite": "Zaproś użytkowników",
       "change_display_name": "Zmień wyświetlaną nazwę",
+      "mentions": "Wzmianki i odpowiedzi",
       "close_sidebar": "Zamknij panel boczny",
       "message_actions": "Akcje wiadomości",
       "organize_channels": "Organizuj kanały",
@@ -1075,6 +1076,7 @@
     "uploads_disabled": "Przesyłanie mediów jest wyłączone na tym kanale",
     "soundboard_disabled": "Panel dźwięków jest wyłączony na tym kanale",
     "file_too_large": "Plik zbyt duży (maks. {{maxMb}} MB)",
+    "file_type_blocked": "Plików .{{ext}} nie można przesyłać na tym serwerze",
     "image_too_large": "Obraz zbyt duży (maks. {{maxMb}} MB)",
     "max_images": "Maks. 5 obrazów naraz",
     "max_files": "Maks. 5 plików naraz",
@@ -1601,7 +1603,26 @@
       "debug": "Debugowanie",
       "backup": "Kopia zapasowa",
       "template": "Szablon serwera",
-      "audit_log": "Dziennik audytu"
+      "audit_log": "Dziennik audytu",
+      "whats_new": "Co nowego"
+    },
+    "pages": {
+      "look": "Wygląd",
+      "chat": "Czat i multimedia",
+      "alerts": "Powiadomienia",
+      "profile": "Profil i aktywność",
+      "security": "Konto i bezpieczeństwo",
+      "language": "Język",
+      "access": "Dostępność",
+      "advanced": "Wtyczki i zaawansowane",
+      "server": "Serwer",
+      "people": "Ludzie i role",
+      "safety": "Bezpieczeństwo",
+      "content": "Treści",
+      "network": "Sieć i skalowanie",
+      "tools": "Boty i dane",
+      "more": "Więcej",
+      "more_info": "Więcej informacji"
     },
     "localization_section": {
       "title": "Lokalizacja"
@@ -2282,6 +2303,9 @@
       "automod_log_channel_placeholder": "kod kanału (opcjonalnie)",
       "automod_activity_group": "Ostatnia aktywność",
       "automod_refresh": "Odśwież",
+      "automod_ai_group": "Sprawdzanie linków przez AI (eksperymentalne)",
+      "automod_ai_enabled": "Pozwól wtyczce AutoMod Quarantine korzystać z tego serwera",
+      "automod_ai_hint": "Eksperymentalne. Domyślnie wyłączone. Włącza serwerową część wtyczki AutoMod Quarantine: sprawdzanie linków modelem AI działającym na tym serwerze (instalowanym przez scripts/setup-automod-ai.sh) oraz przekazywanie zapytań moderatorów do chmurowych usług AI, które odrzucają przeglądarki. Do AI trafia zawsze tylko link, nigdy wiadomość. Członkowie nadal sami decydują, czy włączyć wtyczkę w Wtyczkach i motywach.",
       "bulk_preview_failed": "Podgląd nie powiódł się",
       "mention_everyone_desc": "Powiadom wszystkich na kanale",
       "mention_here_desc": "Powiadom członków online",
@@ -2447,7 +2471,6 @@
       "upload_btn": "Prześlij",
       "remove_btn": "Usuń",
       "server_banner_hint": "Baner serwera (szeroki, maks. 4 MB)",
-      "server_banner_display_hint": "Ustawienia wyświetlania banera (wysokość, przesunięcie, styl nagłówka) znajdują się w Ustawieniach użytkownika.",
       "appearance_welcome": "Wygląd i powitanie",
       "welcome_message": "Wiadomość powitalna",
       "welcome_message_placeholder": "np. Witaj, {user}!",
@@ -2755,6 +2778,9 @@
       "max_avatar_hint": "Największe zdjęcie profilowe, ramka lub obraz persony, jakie można przesłać (od 1 do 10 MB, domyślnie 2). Animowane GIF-y często mają ponad 2 MB, a każdy obraz jest ładowany obok każdej wiadomości jego właściciela, więc utrzymaj to możliwie nisko.",
       "max_emoji_hint": "Maks. rozmiar przesyłania niestandardowego emoji (64–1024 KB, domyślnie 256)",
       "max_poll_hint": "Maksymalna liczba opcji odpowiedzi na ankietę (2–25, domyślnie 10)",
+      "blocked_upload_types": "Zablokowane typy plików",
+      "blocked_upload_types_hint": "Nikt nie może przesyłać plików tych typów. Oddziel je przecinkami. Częste ryzykowne: exe, msi, bat, cmd, com, scr, ps1, vbs, dll, jar. Zostaw puste, aby zezwolić na wszystkie.",
+      "blocked_upload_types_placeholder": "exe, bat, dll",
       "max_message_chars_hint": "Maksymalna liczba znaków na wiadomość, post lub DM (200–100000, domyślnie 2000)",
       "max_invite_uses": "Maksymalna liczba użyć linku zaproszenia",
       "max_invite_uses_hint": "Maksymalna liczba użyć, jaką można ustawić dla linku zaproszenia. Administratorzy i użytkownicy z uprawnieniem do zarządzania serwerem ignorują ten limit. (0 = bez ograniczeń)",
@@ -3150,7 +3176,17 @@
       "blur": "Rozmywaj tematy i wiadomości NSFW do czasu kliknięcia",
       "blur_hint": "Tematy i wiadomości oznaczone 🔞 są za rozmyciem, jak spoiler. Wyłącz, aby widzieć je bez rozmycia."
     },
-    "search_placeholder": "Szukaj w ustawieniach (Ctrl+F)"
+    "search_placeholder": "Szukaj w ustawieniach (Ctrl+F)",
+    "whats_new": {
+      "title": "Co nowego",
+      "show_label": "Pokazuj nowości po",
+      "all": "Każdej aktualizacji",
+      "minor": "Nowych funkcjach",
+      "major": "Tylko dużych aktualizacjach",
+      "off": "Nigdy",
+      "hint": "Numer wersji ma trzy części: duża aktualizacja zmienia pierwszą, nowe funkcje drugą, a poprawki trzecią. Gdy zmieni się podkreślona część, pokażą się informacje o wydaniu. Zapisane na tym urządzeniu.",
+      "show_now": "Zobacz nowości w tej wersji"
+    }
   },
   "modals": {
     "timezone": {
@@ -3492,7 +3528,9 @@
       "not_here": "Wysyłanie później nie jest dostępne w wiadomościach prywatnych",
       "scheduled": "Zaplanowano na {{when}}",
       "updated": "Zaktualizowano, wysłanie o {{when}}",
-      "sent": "Twoja zaplanowana wiadomość została wysłana na #{{channel}}"
+      "sent": "Twoja zaplanowana wiadomość została wysłana na #{{channel}}",
+      "attach": "📎 Dołącz pliki",
+      "remove_file": "Usuń"
     },
     "self_destruct": {
       "title": "Wiadomość samoniszcząca się",
@@ -3641,7 +3679,7 @@
     "donors": {
       "title": "Dziękujemy",
       "subtitle": "Haven jest tworzony z miłością i utrzymywany dzięki hojności takich ludzi jak ty. Każda darowizna — duża czy mała — wiele dla nas znaczy.",
-      "sponsors_title": "Sponsorzy",
+      "sponsors_title": "Wspierający co miesiąc",
       "donors_title": "Darczyńcy",
       "note": "Nowi darczyńcy będą dodawani przy każdym wydaniu. Jeśli dokonałeś darowizny i nie widzisz swojej nazwy, pojawi się w następnej aktualizacji!",
       "kofi_btn": "Wesprzyj Haven na Ko-fi",
@@ -4837,5 +4875,10 @@
       "none": "Nie ma jeszcze odznak nadawanych ręcznie. Utwórz jedną w Ustawienia, Administrator, Odznaki.",
       "switched_off": "wyłączona"
     }
+  },
+  "whats_new": {
+    "title": "Co nowego w Haven {{version}}",
+    "settings_hint": "W Ustawienia > Co nowego wybierasz, kiedy to się pokazuje.",
+    "unavailable": "Informacje o wydaniu nie są dostępne na tym serwerze."
   }
 }

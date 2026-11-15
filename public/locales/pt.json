@@ -251,6 +251,7 @@
       "logout": "Sair",
       "invite": "Convidar usuários",
       "change_display_name": "Alterar nome de exibição",
+      "mentions": "Menções e respostas",
       "close_sidebar": "Fechar barra lateral",
       "message_actions": "Ações da mensagem",
       "organize_channels": "Organizar canais",
@@ -941,6 +942,7 @@
     "uploads_disabled": "O envio de mídia está desativado neste canal",
     "soundboard_disabled": "O painel de sons está desativado neste canal",
     "file_too_large": "Arquivo grande demais (máximo {{maxMb}} MB)",
+    "file_type_blocked": "Arquivos .{{ext}} não podem ser enviados neste servidor",
     "image_too_large": "Imagem grande demais (máximo {{maxMb}} MB)",
     "max_images": "No máximo 5 imagens por vez",
     "max_files": "No máximo 5 arquivos por vez",
@@ -1450,7 +1452,26 @@
       "debug": "Depuração",
       "backup": "Backup",
       "audit_log": "Registro de auditoria",
-      "extension_updates": "Atualizações de extensões"
+      "extension_updates": "Atualizações de extensões",
+      "whats_new": "Novidades"
+    },
+    "pages": {
+      "look": "Aparência",
+      "chat": "Chat e mídia",
+      "alerts": "Notificações",
+      "profile": "Perfil e atividade",
+      "security": "Conta e segurança",
+      "language": "Idioma",
+      "access": "Acessibilidade",
+      "advanced": "Plugins e avançado",
+      "server": "Servidor",
+      "people": "Pessoas e cargos",
+      "safety": "Segurança",
+      "content": "Conteúdo",
+      "network": "Rede e escala",
+      "tools": "Bots e dados",
+      "more": "Mais",
+      "more_info": "Mais informações"
     },
     "localization_section": {
       "title": "Localização"
@@ -2002,6 +2023,9 @@
       "automod_log_channel_placeholder": "código do canal (opcional)",
       "automod_activity_group": "Atividade recente",
       "automod_refresh": "Atualizar",
+      "automod_ai_group": "Verificação de links por IA (experimental)",
+      "automod_ai_enabled": "Permitir que o plugin AutoMod Quarantine use este servidor",
+      "automod_ai_hint": "Experimental. Desligado por padrão. Liga a parte de servidor do plugin AutoMod Quarantine: verificar links com um modelo de IA rodando neste servidor (instalado com scripts/setup-automod-ai.sh) e repassar os pedidos dos moderadores para serviços de IA na nuvem que recusam navegadores. Só o link é enviado para uma IA, nunca a mensagem. Cada membro continua decidindo se liga o plugin em Plugins e temas.",
       "bulk_preview_failed": "Falha na prévia",
       "mention_everyone_desc": "Notificar todos no canal",
       "mention_here_desc": "Notificar membros online",
@@ -2127,7 +2151,6 @@
       "upload_btn": "Enviar",
       "remove_btn": "Remover",
       "server_banner_hint": "Banner do servidor (largo, máximo de 4 MB)",
-      "server_banner_display_hint": "As configurações de exibição do banner (altura, deslocamento e estilo do cabeçalho) ficam nas Configurações do usuário.",
       "appearance_welcome": "Aparência e boas-vindas",
       "welcome_message": "Mensagem de boas-vindas",
       "welcome_message_placeholder": "ex.: Boas-vindas, {user}!",
@@ -2399,6 +2422,9 @@
       "max_sound_hint": "Tamanho máximo de envio para o painel de sons (256–10240 KB, padrão: 1024 / 1 MB)",
       "max_emoji_hint": "Tamanho máximo de envio de emoji personalizado (64–1024 KB, padrão: 256)",
       "max_poll_hint": "Máximo de opções de resposta por enquete (2–25, padrão: 10)",
+      "blocked_upload_types": "Tipos de arquivo bloqueados",
+      "blocked_upload_types_hint": "Ninguém pode enviar arquivos desses tipos. Separe-os com vírgulas. Tipos arriscados comuns: exe, msi, bat, cmd, com, scr, ps1, vbs, dll, jar. Deixe vazio para permitir todos.",
+      "blocked_upload_types_placeholder": "exe, bat, dll",
       "max_message_chars_hint": "Máximo de caracteres por mensagem, publicação ou DM (200–100000, padrão: 2000)",
       "max_invite_uses": "Máximo de utilizações do link de convite",
       "max_invite_uses_hint": "O número máximo de utilizações que pode ser definido para um link de convite. Administradores e utilizadores com permissão para gerir o servidor ignoram este limite. (0 = ilimitado)",
@@ -2807,6 +2833,16 @@
         "twemoji": "Twemoji",
         "hint": "O Twemoji desenha os emoji iguais em todos os dispositivos, com uma fonte que o próprio Haven fornece."
       }
+    },
+    "whats_new": {
+      "title": "Novidades",
+      "show_label": "Mostrar novidades após",
+      "all": "Cada atualização",
+      "minor": "Recursos novos",
+      "major": "Só grandes atualizações",
+      "off": "Nunca",
+      "hint": "Um número de versão tem três partes: uma grande atualização muda a primeira, recursos novos a segunda e correções a terceira. Quando uma parte sublinhada muda, aparecem as notas da versão. Salvo neste dispositivo.",
+      "show_now": "Ver as novidades desta versão"
     }
   },
   "modals": {
@@ -3143,7 +3179,9 @@
       "not_here": "Enviar depois não funciona em mensagens diretas",
       "scheduled": "Agendada para {{when}}",
       "updated": "Atualizada, enviando às {{when}}",
-      "sent": "Sua mensagem agendada foi enviada em #{{channel}}"
+      "sent": "Sua mensagem agendada foi enviada em #{{channel}}",
+      "attach": "📎 Anexar arquivos",
+      "remove_file": "Remover"
     },
     "poll": {
       "title": "Criar enquete",
@@ -3280,7 +3318,7 @@
     "donors": {
       "title": "Obrigado",
       "subtitle": "O Haven é construído com carinho e continua vivo graças à generosidade de pessoas como você. Toda doação, grande ou pequena, significa muito.",
-      "sponsors_title": "Patrocinadores",
+      "sponsors_title": "Apoiadores mensais",
       "donors_title": "Doadores",
       "note": "Novos doadores serão adicionados a cada lançamento. Se você doou e não vê seu nome, ele aparecerá na próxima atualização!",
       "kofi_btn": "Apoiar o Haven no Ko-fi",
@@ -4234,5 +4272,10 @@
   "groups": {
     "no_key": "🔒 Esperando outro membro do grupo abrir o Haven e compartilhar a chave",
     "before_join": "🔒 Enviado antes de você entrar (ou antes de suas chaves serem redefinidas), então não pode ser aberto aqui"
+  },
+  "whats_new": {
+    "title": "Novidades do Haven {{version}}",
+    "settings_hint": "Em Configurações > Novidades você escolhe quando isso aparece.",
+    "unavailable": "As notas da versão não estão disponíveis neste servidor."
   }
 }

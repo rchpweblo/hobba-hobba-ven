@@ -15,25 +15,60 @@ async function resolveSpotifyToYouTube(spotifyUrl) {
     const title = oembed.title; // e.g. "Thank You - Dido"
     if (!title) return null;
 
-    // 2. Search YouTube: try refined query first, then broader
-    const queries = [
-      title + ' official audio',
-      title + ' audio',
-      title
-    ];
-    for (const q of queries) {
-      const results = await searchYouTube(q, 1);
-      if (results.length > 0) {
-        return {
-          url: `https://www.youtube.com/watch?v=${results[0].videoId}`,
-          title,
-          duration: results[0].duration || ''
-        };
-      }
-    }
-    return null;
+    // 2. Search YouTube for it
+    return await findOnYouTube(title);
   } catch {
     return null;
+  }
+}
+
+// A song's YouTube video, by its "Title - Artist" name: the refined search
+// first, then broader ones. { url, title, duration } or null.
+async function findOnYouTube(title) {
+  const queries = [
+    title + ' official audio',
+    title + ' audio',
+    title
+  ];
+  for (const q of queries) {
+    const results = await searchYouTube(q, 1);
+    if (results.length > 0) {
+      return {
+        url: `https://www.youtube.com/watch?v=${results[0].videoId}`,
+        title,
+        duration: results[0].duration || ''
+      };
+    }
+  }
+  return null;
+}
+
+// The songs on a Spotify playlist or album, in order, as [{ title, artist }].
+// Spotify's embed page carries the list in its page data, so no account or
+// key is needed. Private playlists and podcast episodes are not included.
+async function fetchSpotifyTrackList(kind, id, maxTracks = 200) {
+  if (!/^(playlist|album)$/.test(kind) || !/^[A-Za-z0-9]+$/.test(id)) return [];
+  try {
+    const res = await fetch(`https://open.spotify.com/embed/${kind}/${id}`, {
+      headers: { 'User-Agent': YT_UA },
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const m = html.match(/<script id="__NEXT_DATA__" type="application\/json">(.+?)<\/script>/s);
+    if (!m) return [];
+    const list = JSON.parse(m[1])?.props?.pageProps?.state?.data?.entity?.trackList;
+    if (!Array.isArray(list)) return [];
+    return list
+      .filter(t => t && typeof t.title === 'string' && t.title.trim() && (!t.entityType || t.entityType === 'track'))
+      .slice(0, maxTracks)
+      .map(t => ({
+        title: t.title.trim(),
+        artist: typeof t.subtitle === 'string' ? t.subtitle.replace(/\s+/g, ' ').trim() : ''
+      }));
+  } catch (err) {
+    console.warn('[Music] could not read the Spotify list:', err.message);
+    return [];
   }
 }
 
@@ -298,5 +333,6 @@ async function resolveMusicMetadata(url) {
 
 module.exports = {
   resolveSpotifyToYouTube, searchYouTube, fetchYouTubePlaylist,
-  extractYouTubeVideoId, resolveMusicMetadata
+  extractYouTubeVideoId, resolveMusicMetadata,
+  findOnYouTube, fetchSpotifyTrackList
 };

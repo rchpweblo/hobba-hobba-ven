@@ -96,6 +96,7 @@ _setThreadReply(msgEl, msgId) {
   const shown = this._bazaarDiscordRefsText?.(rawContent) ?? rawContent; // Bizarre Bazaar fork: codes as names
   const preview = shown.length > 70 ? shown.substring(0, 70) + '…' : shown;
   this._threadReplyingTo = { id: msgId, username: author, content: rawContent };
+  this._forumBlogThread && this._forumBlogComposerHint?.();
 
   const bar = document.getElementById('thread-reply-bar');
   const text = document.getElementById('thread-reply-preview-text');
@@ -109,6 +110,7 @@ _setThreadReply(msgEl, msgId) {
 
 _clearThreadReply() {
   this._threadReplyingTo = null;
+  this._forumBlogThread && this._forumBlogComposerHint?.();
   const bar = document.getElementById('thread-reply-bar');
   if (bar) bar.style.display = 'none';
 },
@@ -255,6 +257,8 @@ _toggleThread(parentId) {
 },
 
 _openThread(parentId) {
+  // Replies picked in another thread do not carry over (app-unthread.js).
+  if (this._moveSourceThread && Number(this._moveSourceThread) !== Number(parentId)) this._exitMoveSelectionMode?.();
   this._activeThreadParent = parentId;
   // Clear any pending thread mentions for this thread/channel
   this._clearThreadMentionsForParent(this.currentChannel, parentId);
@@ -268,6 +272,7 @@ _openThread(parentId) {
   panel.style.display = 'flex';
   panel.dataset.parentId = parentId;
   this._setThreadPiPEnabled(localStorage.getItem('haven_thread_panel_pip') === '1');
+  this._syncUnthreadSelectBtn?.();
   if (this._channelBlocksPosting?.()) this._applyThreadClosed(false);
 
   // Request thread messages from server. Bizarre Bazaar fork: a page at a
@@ -346,8 +351,12 @@ _applyThreadClosed(closed) {
 },
 
 _closeThread() {
+  // Replies picked in it went with the panel (app-unthread.js).
+  if (this._moveSourceThread) this._exitMoveSelectionMode?.();
   this._activeThreadParent = null;
   this._clearThreadReply();
+  // A reaction picker opened on a reply has nothing left to react to.
+  this._closeReactionPickers?.();
   const panel = document.getElementById('thread-panel');
   if (panel) {
     panel.style.display = 'none';

@@ -47,6 +47,7 @@ function startFakeDiscord(port) {
   const pins = new Map();          // channel id -> pinned message ids, newest first
   const pinCalls = [];             // { method, channelId, messageId, status }
   const channelPatches = [];       // { channelId, body }
+  const reactions = [];            // { method, channelId, messageId, emoji } the bot's own
   let seq = 0;
   let identified = 0;
 
@@ -209,6 +210,12 @@ function startFakeDiscord(port) {
         edits.push({ webhookId: hook.id, messageId: parts[4], threadId: url.searchParams.get('thread_id'), body });
         return json(res, 200, { id: parts[4], content: body && body.content });
       }
+      // /channels/:id/messages/:id/reactions/:emoji/@me, the bot reacting
+      if ((req.method === 'PUT' || req.method === 'DELETE') && parts[0] === 'channels' && parts[2] === 'messages'
+        && parts[4] === 'reactions' && parts[6] === '@me') {
+        reactions.push({ method: req.method, channelId: parts[1], messageId: parts[3], emoji: decodeURIComponent(parts[5]) });
+        res.writeHead(204); return res.end();
+      }
       if (req.method === 'POST' && url.pathname === '/users/@me/channels') return json(res, 200, { id: newId(), type: 1, recipient_id: body && body.recipient_id });
       if (req.method === 'GET' && parts[0] === 'guilds' && parts[2] === 'members' && parts.length === 4) return json(res, 200, { user: { id: parts[3], username: 'member', bot: false } });
       if (req.method === 'POST' && parts[0] === 'channels' && parts[2] === 'messages') {
@@ -266,6 +273,7 @@ function startFakeDiscord(port) {
       forumChannel,
       executions,
       botMessages,
+      reactions,
       webhooks,
       threads,
       threadsMade,

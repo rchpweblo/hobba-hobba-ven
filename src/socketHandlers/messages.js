@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const { utcStamp, isString, isInt, sanitizeText, parseBorderTransform, toReplyContext, stripRoleMentions, releasableUploads } = require('./helpers');
 const { getActiveTokenizer, minQueryChars, buildMatchQuery } = require('../searchIndex');
 const selfDestruct = require('../selfDestruct');
+const { isUsableEmoji } = require('../builtinEmojis');
 const { applyTagsToMessage, applyTagsToFiles, fileTags, messageTags, setMessageTags, normalizeTagName, escapeLike, extractUploadPath, extractUploadPaths, effectiveLimits } = require('../uploadTags');
 const { votesFor, pieceVotesFor } = require('../forumVotes');
 const forumBlog = require('../forumBlog');
@@ -12,16 +13,20 @@ const bazaarForum = require('../bazaarForum');
 const BAZAAR_THREAD_PAGE = 150;
 const highlights = require('../messageHighlights');
 const quotes = require('../messageQuotes');
+const ferryReactions = require('../ferryReactions');
 const forumUnread = require('../forumUnread');
 const threadNotify = require('../threadNotify');
 const protectedMessages = require('../protectedMessages');
 const mediaGroup = require('../mediaGroup');
 const { takeSilent } = require('../silentMessages');
+const { parseSlash } = require('../slashParse');
 const { tagAccess } = require('../uploadTagRoles');
 const { moveToChannel } = require('../moveMessages');
 const storage = require('../storage');
 const { groupHistoryFloor } = require('../groupHistory');
 const { isSafeUploadRelPath } = storage;
+const createReadPositions = require('../db/readPositions');
+const { mentionsMeCondition } = require('../mentionFilter');
 
 // The length limit is on what people type. An encrypted DM reaches the
 // server as ciphertext: AES-GCM output in base64 inside a small JSON wrapper,
@@ -63,6 +68,7 @@ module.exports = function register(socket, ctx) {
           touchVoiceActivity, floodCheck, enforceAutomod, parseFerryTarget, ferryRelay, ferryRelayReply,
           logAudit } = ctx;
   const { slowModeTracker } = state;
+  const readPositions = createReadPositions(db);
   // A moderator acting on a message in a channel goes on the audit log, with
   // the channel and whose message it was. DMs are left out: what happens in
   // a conversation is its two people's business.
@@ -389,6 +395,7 @@ module.exports = function register(socket, ctx) {
         if (!reactionMap.has(r.message_id)) reactionMap.set(r.message_id, []);
         reactionMap.get(r.message_id).push({ emoji: r.emoji, user_id: r.user_id, username: r.username });
       });
+      ferryReactions.mergeInto(db, msgIds, reactionMap);
 
       pinnedSet = new Set(
         db.prepare(`SELECT message_id FROM pinned_messages WHERE message_id IN (${ph})`)
@@ -615,7 +622,7 @@ module.exports = function register(socket, ctx) {
     const token = data.token;
 
     // ── Parse filters out of the query text ──
-    const filters = { from: null, in: null, has: null, pinned: null, before: null, after: null, during: null, tag: null };
+    const filters = { from: null, in: null, has: null, pinned: null, before: null, after: null, during: null, tag: null, mentions: null };
     query = query.replace(/\bfrom:(\S+)/gi, (_, v) => { filters.from = v; return ''; });
     // tag: supports a quoted value so multi-word tags work (tags allow spaces);
     // the filter picker and clickable message tags append the quoted form.
@@ -628,6 +635,8 @@ module.exports = function register(socket, ctx) {
     query = query.replace(/\bbefore:(\S+)/gi, (_, v) => { filters.before = v; return ''; });
     query = query.replace(/\bafter:(\S+)/gi, (_, v) => { filters.after = v; return ''; });
     query = query.replace(/\bduring:(\S+)/gi, (_, v) => { filters.during = v; return ''; });
+    // mentions:me lists messages that @mention you or reply to you (the @ button).
+    query = query.replace(/\bmentions:me\b/gi, () => { filters.mentions = 'me'; return ''; });
     query = query.trim();
 
     // Only keep well-formed YYYY-MM-DD dates; drop anything else silently.
@@ -648,7 +657,7 @@ module.exports = function register(socket, ctx) {
 
     // Never dump the whole corpus: require free text or at least one filter.
     const anyFilter = filters.from || filters.has || filters.in || filters.pinned ||
-                      filters.before || filters.after || filters.during || filters.tag;
+                      filters.before || filters.after || filters.during || filters.tag || filters.mentions;
     if (!usesFts && !anyFilter) {
       return socket.emit('search-results', empty);
     }
@@ -718,6 +727,15 @@ module.exports = function register(socket, ctx) {
       if (!norm) return socket.emit('search-results', empty);
       conditions.push("m.id IN (SELECT at.message_id FROM attachment_tags at JOIN upload_tags ut ON ut.id = at.tag_id WHERE ut.name_norm LIKE ? ESCAPE '\\')");
       params.push(escapeLike(norm.norm) + '%');
+    }
+
+    // ── mentions:me filter (src/mentionFilter.js) ──
+    if (filters.mentions) {
+      const me = db.prepare('SELECT username FROM users WHERE id = ?').get(socket.user.id);
+      const cond = me && mentionsMeCondition(socket.user.id, me.username);
+      if (!cond) return socket.emit('search-results', empty);
+      conditions.push(cond.sql);
+      params.push(...cond.params);
     }
 
     // ── date filters (created_at). during: is the whole named day. ──
@@ -1431,11 +1449,9 @@ module.exports = function register(socket, ctx) {
     const trimmed = content.trim();
     const isImage = data.isImage === true;
     const isUpload = /^\/uploads\b/i.test(trimmed);
-    const isPath = trimmed.startsWith('/') && trimmed.indexOf('/', 1) !== -1;
-    const slashMatch = (!isImage && !isUpload && !isPath) ? trimmed.match(/^\/([a-zA-Z]+)(?:\s+(.*))?$/) : null;
-    if (slashMatch) {
-      const cmd = slashMatch[1].toLowerCase();
-      const arg = (slashMatch[2] || '').trim();
+    const slash = (!isImage && !isUpload) ? parseSlash(trimmed) : null;
+    if (slash) {
+      const { cmd, arg } = slash;
       const slashResult = processSlashCommand(cmd, arg, socket.user.displayName, channel.id, code);
       if (slashResult && slashResult.botCommand) {
         // Bot command fired; bot will respond via webhook endpoint
@@ -1476,13 +1492,8 @@ module.exports = function register(socket, ctx) {
           destructAt ? '🔥 Sent a self-destructing message' : slashResult.content, { silent: !!silent });
         fireWebhookCallbacks(channel.id, code, message);
 
-        try {
-          db.prepare(`
-            INSERT INTO read_positions (user_id, channel_id, last_read_message_id)
-            VALUES (?, ?, ?)
-            ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
-          `).run(socket.user.id, channel.id, result.lastInsertRowid);
-        } catch (e) { /* only the sender's own unread marker; it catches up on their next read */ }
+        readPositions.advance(socket.user.id, channel.id, result.lastInsertRowid)
+          .catch(() => { /* only the sender's own unread marker; it catches up on their next read */ });
         return;
       }
     }
@@ -1723,13 +1734,8 @@ module.exports = function register(socket, ctx) {
         });
       }
 
-      try {
-        db.prepare(`
-          INSERT INTO read_positions (user_id, channel_id, last_read_message_id)
-          VALUES (?, ?, ?)
-          ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
-        `).run(socket.user.id, channel.id, result.lastInsertRowid);
-      } catch (e) { /* only the sender's own unread marker; it catches up on their next read */ }
+      readPositions.advance(socket.user.id, channel.id, result.lastInsertRowid)
+        .catch(() => { /* only the sender's own unread marker; it catches up on their next read */ });
     } catch (err) {
       console.error('send-message error:', err.message);
       socket.emit('error-msg', 'Failed to send message. Please try again');
@@ -1964,19 +1970,31 @@ module.exports = function register(socket, ctx) {
   function scheduleMaxChars() {
     return parseInt(db.prepare("SELECT value FROM server_settings WHERE key = 'max_message_chars'").get()?.value) || 2000;
   }
+  // A scheduled message may carry files like a live one: the typed text is
+  // held to the limit, with room for the upload lines, and the channel has
+  // to take media. Why it cannot be queued, or null.
+  function scheduleRefusal(content, channel, isAdmin) {
+    const why = sizeRefusal(content, channel, { maxChars: scheduleMaxChars(), maxAttachments: maxAttachmentsSetting() });
+    if (why) return why;
+    const media = mediaGroup.hasMedia(content);
+    if (channel.text_enabled === 0 && !(media && mediaGroup.isMediaOnly(content))) return 'Text messages are disabled in this channel';
+    if (media && channel.media_enabled === 0 && !isAdmin) return 'Media uploads are disabled in this channel';
+    return null;
+  }
 
   socket.on('schedule-message', (data, callback) => {
     const cb = typeof callback === 'function' ? callback : () => {};
     if (!data || typeof data !== 'object') return cb({ error: 'Invalid request' });
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!/^[a-f0-9]{8}$/i.test(code)) return cb({ error: 'Invalid channel' });
-    if (!isString(data.content, 1, scheduleMaxChars())) return cb({ error: 'Nothing to send, or the message is too long' });
+    if (!isString(data.content, 1, sizeCeiling(scheduleMaxChars()))) return cb({ error: 'Nothing to send, or the message is too long' });
     const sendAt = parseSendAt(data.sendAt);
     if (!sendAt) return cb({ error: `Pick a time in the future, up to ${SCHEDULE_MAX_DAYS} days away` });
-    const channel = db.prepare('SELECT id, is_dm, read_only, text_enabled FROM channels WHERE code = ?').get(code);
+    const channel = db.prepare('SELECT id, is_dm, read_only, text_enabled, media_enabled FROM channels WHERE code = ?').get(code);
     if (!channel) return cb({ error: 'Channel not found' });
     if (channel.is_dm) return cb({ error: 'Scheduled sends are not available in direct messages' });
-    if (channel.text_enabled === 0) return cb({ error: 'Text messages are disabled in this channel' });
+    const refusal = scheduleRefusal(data.content.trim(), channel, socket.user.isAdmin);
+    if (refusal) return cb({ error: refusal });
     if (!hasChannelAccess(channel.id)) return cb({ error: 'Not a member of this channel' });
     if (channel.read_only === 1 && !socket.user.isAdmin && !userHasPermission(socket.user.id, 'read_only_override', channel.id)) return cb({ error: 'This channel is read-only' });
     if (bazaarForum.blocksNewPost(db, channel.id, { userId: socket.user.id, isAdmin: socket.user.isAdmin }, userHasPermission)) return cb({ error: bazaarForum.REFUSAL });
@@ -2009,11 +2027,14 @@ module.exports = function register(socket, ctx) {
     if (!data || typeof data !== 'object' || !isInt(data.id)) return cb({ error: 'Invalid request' });
     const row = db.prepare('SELECT id, channel_id FROM scheduled_messages WHERE id = ? AND user_id = ?').get(data.id, socket.user.id);
     if (!row) return cb({ error: 'That scheduled message is gone' });
-    if (!isString(data.content, 1, scheduleMaxChars())) return cb({ error: 'Nothing to send, or the message is too long' });
+    if (!isString(data.content, 1, sizeCeiling(scheduleMaxChars()))) return cb({ error: 'Nothing to send, or the message is too long' });
     const sendAt = parseSendAt(data.sendAt);
     if (!sendAt) return cb({ error: `Pick a time in the future, up to ${SCHEDULE_MAX_DAYS} days away` });
     const content = sanitizeText(data.content.trim());
     if (!content) return cb({ error: 'Nothing to send' });
+    const chRow = db.prepare('SELECT id, is_dm, text_enabled, media_enabled FROM channels WHERE id = ?').get(row.channel_id);
+    const refusal = chRow ? scheduleRefusal(content, chRow, socket.user.isAdmin) : 'Channel not found';
+    if (refusal) return cb({ error: refusal });
     if (enforceAutomod(content, { surface: 'edit', channelId: row.channel_id, markdown: true })) return cb({ error: 'That message was blocked' });
     db.prepare('UPDATE scheduled_messages SET content = ?, send_at = ? WHERE id = ?').run(content, sendAt, row.id);
     cb({ success: true, items: scheduledList(socket.user.id) });
@@ -2045,12 +2066,16 @@ module.exports = function register(socket, ctx) {
           const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(row.channel_id, row.user_id);
           if (!author || !member) continue;
           // The rules at the moment it goes out, not when it was queued: a
-          // ban or a mute since then, a channel gone read-only or text-off,
-          // required roles lost, or mention_everyone taken away all count.
+          // ban or a mute since then, a channel gone read-only, text-off or
+          // media-off, required roles lost, or mention_everyone taken away
+          // all count.
           if (db.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(author.id)) continue;
           if (activeMuteNotice(author.id)) continue;
-          const chNow = db.prepare('SELECT id, read_only, text_enabled, role_gate FROM channels WHERE id = ?').get(row.channel_id);
-          if (!chNow || chNow.text_enabled === 0) continue;
+          const chNow = db.prepare('SELECT id, read_only, text_enabled, media_enabled, role_gate FROM channels WHERE id = ?').get(row.channel_id);
+          if (!chNow) continue;
+          const media = mediaGroup.hasMedia(row.content);
+          if (chNow.text_enabled === 0 && !(media && mediaGroup.isMediaOnly(row.content))) continue;
+          if (media && chNow.media_enabled === 0 && !author.is_admin) continue;
           if (!author.is_admin && chNow.read_only === 1 && !userHasPermission(author.id, 'read_only_override', chNow.id)) continue;
           if (bazaarForum.blocksNewPost(db, chNow.id, { userId: author.id, isAdmin: !!author.is_admin }, userHasPermission)) continue;
           if (!author.is_admin && !ctx.roleGateAllows(author.id, chNow)) continue;
@@ -2695,16 +2720,8 @@ module.exports = function register(socket, ctx) {
       const reactMute = activeMuteNotice(socket.user.id);
       if (reactMute) return socket.emit('error-msg', reactMute);
 
-      const allowed = /^[\p{Emoji}\p{Emoji_Component}\uFE0F\u200D]+$/u;
-      const customEmojiPattern = /^:[a-zA-Z0-9_-]{1,30}:$/;
-      if (!allowed.test(data.emoji) && !customEmojiPattern.test(data.emoji)) return;
-      if (data.emoji.length > 32) return;
-
-      if (customEmojiPattern.test(data.emoji)) {
-        const emojiName = data.emoji.slice(1, -1).toLowerCase();
-        const exists = db.prepare('SELECT 1 FROM custom_emojis WHERE name = ?').get(emojiName);
-        if (!exists) return;
-      }
+      // A Unicode emoji, or :name: for one of Haven's own or the server's custom ones.
+      if (!isUsableEmoji(db, data.emoji)) return;
 
       // Look up the channel from the message itself, not socket.currentChannel.
       // Reactions can be triggered from the DM PiP while the user's main pane
@@ -2733,17 +2750,17 @@ module.exports = function register(socket, ctx) {
         'INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)'
       ).run(data.messageId, socket.user.id, data.emoji);
       ctx.applySelfRoleReaction?.(socket, data.messageId, data.emoji, true);
+      // On a message Ferry carried, the Discord copy gets the bot's reaction.
+      ctx.ferryReactionChanged?.({ messageId: data.messageId, channelId: msg.channel_id, emoji: data.emoji, added: true });
 
-      const reactions = db.prepare(`
-        SELECT r.emoji, r.user_id, COALESCE(u.display_name, u.username) as username FROM reactions r
-        JOIN users u ON r.user_id = u.id WHERE r.message_id = ? ORDER BY r.id
-      `).all(data.messageId);
+      const reactions = ferryReactions.listFor(db, data.messageId);
 
       io.to(`channel:${code}`).emit('reactions-updated', {
         channelCode: code,
         messageId: data.messageId,
         reactions
       });
+      ctx.emitRolePickers?.(code, data.messageId);
 
       // Webhook event: reaction-added (3.13.0)
       try {
@@ -2780,17 +2797,16 @@ module.exports = function register(socket, ctx) {
         'DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
       ).run(data.messageId, socket.user.id, data.emoji);
       ctx.applySelfRoleReaction?.(socket, data.messageId, data.emoji, false);
+      ctx.ferryReactionChanged?.({ messageId: data.messageId, channelId: msgRow.channel_id, emoji: data.emoji, added: false });
 
-      const reactions = db.prepare(`
-        SELECT r.emoji, r.user_id, COALESCE(u.display_name, u.username) as username FROM reactions r
-        JOIN users u ON r.user_id = u.id WHERE r.message_id = ? ORDER BY r.id
-      `).all(data.messageId);
+      const reactions = ferryReactions.listFor(db, data.messageId);
 
       io.to(`channel:${code}`).emit('reactions-updated', {
         channelCode: code,
         messageId: data.messageId,
         reactions
       });
+      ctx.emitRolePickers?.(code, data.messageId);
     } catch (err) {
       console.error('remove-reaction error:', err.message);
     }
@@ -2971,52 +2987,54 @@ module.exports = function register(socket, ctx) {
   });
 
   // ── Read positions ──────────────────────────────────────
-  socket.on('mark-read', (data) => {
+  // Tell every connected device of one account that channels were read, so
+  // each can drop its own notification for them. Looks at the sockets once
+  // however many channels there are. Other accounts never see it.
+  function emitChannelRead(userId, reads) {
+    if (!reads.length) return;
+    const devices = [];
+    for (const [, connected] of io.sockets.sockets) {
+      if (connected.user && connected.user.id === userId) devices.push(connected);
+    }
+    for (const connected of devices) {
+      for (const read of reads) connected.emit('channel-read', read);
+    }
+  }
+
+  socket.on('mark-read', async (data) => {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
     if (!isInt(data.messageId) || data.messageId <= 0) return;
 
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
-    if (!channel) return;
-
-    const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
-    if (!member) return;
-
     try {
-      db.prepare(`
-        INSERT INTO read_positions (user_id, channel_id, last_read_message_id)
-        VALUES (?, ?, ?)
-        ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
-      `).run(socket.user.id, channel.id, data.messageId);
+      const result = await readPositions.markRead(socket.user.id, code, data.messageId);
+      // Only a receipt that was actually stored (the account is a member)
+      // is worth telling the account's other devices about.
+      if (result?.changes) emitChannelRead(socket.user.id, [{ channelCode: code, messageId: data.messageId }]);
     } catch (err) {
       console.error('Mark read error:', err);
     }
   });
 
   // Mark entire channel as read (context menu action)
-  socket.on('mark-read-channel', (data) => {
+  socket.on('mark-read-channel', async (data) => {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const channel = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
-    if (!channel) return;
-
-    const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
-    if (!member) return;
-
     try {
       // Mark up to the latest non-thread message. Thread replies have their
       // own panel and don't participate in channel-level read positions.
-      const latest = db.prepare('SELECT MAX(id) AS maxId FROM messages WHERE channel_id = ? AND thread_id IS NULL').get(channel.id);
-      if (!latest || !latest.maxId) return;
-
-      db.prepare(`
-        INSERT INTO read_positions (user_id, channel_id, last_read_message_id)
-        VALUES (?, ?, ?)
-        ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
-      `).run(socket.user.id, channel.id, latest.maxId);
+      const result = await readPositions.markChannelRead(socket.user.id, code);
+      if (result?.changes) {
+        const latest = await (db.async || db).prepare(`
+          SELECT MAX(m.id) AS messageId
+          FROM channels c JOIN messages m ON m.channel_id = c.id AND m.thread_id IS NULL
+          WHERE c.code = ?
+        `).get(code);
+        emitChannelRead(socket.user.id, [{ channelCode: code, messageId: latest?.messageId || null }]);
+      }
     } catch (err) {
       console.error('Mark read channel error:', err);
     }
@@ -3025,25 +3043,22 @@ module.exports = function register(socket, ctx) {
   // Mark everything read (#5683): every channel and DM this account belongs
   // to moves to its latest message, including ones the sidebar is not showing,
   // which is where a badge nobody can reach to clear comes from.
-  socket.on('mark-all-read', (data, callback) => {
+  socket.on('mark-all-read', async (data, callback) => {
     const cb = typeof callback === 'function' ? callback : () => {};
     try {
-      const rows = db.prepare(`
-        SELECT cm.channel_id AS channelId, MAX(m.id) AS latest
-        FROM channel_members cm
-        JOIN messages m ON m.channel_id = cm.channel_id AND m.thread_id IS NULL
-        WHERE cm.user_id = ?
-        GROUP BY cm.channel_id
+      const channels = await readPositions.markAllRead(socket.user.id);
+      const driver = db.async || db;
+      const readChannels = await driver.prepare(`
+        SELECT c.code, MAX(m.id) AS messageId
+        FROM channels c
+        JOIN channel_members cm ON cm.channel_id = c.id AND cm.user_id = ?
+        LEFT JOIN messages m ON m.channel_id = c.id AND m.thread_id IS NULL
+        GROUP BY c.id, c.code
       `).all(socket.user.id);
-      const upsert = db.prepare(`
-        INSERT INTO read_positions (user_id, channel_id, last_read_message_id)
-        VALUES (?, ?, ?)
-        ON CONFLICT(user_id, channel_id) DO UPDATE SET last_read_message_id = MAX(last_read_message_id, excluded.last_read_message_id)
-      `);
-      db.transaction(() => {
-        for (const r of rows) if (r.latest) upsert.run(socket.user.id, r.channelId, r.latest);
-      })();
-      cb({ ok: true, channels: rows.length });
+      emitChannelRead(socket.user.id, readChannels
+        .filter(channel => channel.messageId)
+        .map(channel => ({ channelCode: channel.code, messageId: channel.messageId })));
+      cb({ ok: true, channels });
     } catch (err) {
       console.error('Mark all read error:', err);
       cb({ error: 'Could not mark everything read' });
@@ -3053,25 +3068,13 @@ module.exports = function register(socket, ctx) {
   // Mark every topic in a forum channel read for this account (#5641). Each
   // topic's row moves to its latest reply, or 0 when it has none, so the dot
   // comes back only for replies that land after this.
-  socket.on('mark-forum-read', (data) => {
+  socket.on('mark-forum-read', async (data) => {
     if (!data || typeof data !== 'object') return;
     const code = typeof data.code === 'string' ? data.code.trim() : '';
     if (!code || !/^[a-f0-9]{8}$/i.test(code)) return;
 
-    const channel = db.prepare('SELECT id, is_forum FROM channels WHERE code = ?').get(code);
-    if (!channel || !channel.is_forum) return;
-
-    const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(channel.id, socket.user.id);
-    if (!member && !socket.user.isAdmin) return;
-
     try {
-      db.prepare(`
-        INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id)
-        SELECT ?, m.id, COALESCE((SELECT MAX(r.id) FROM messages r WHERE r.thread_id = m.id), 0)
-        FROM messages m
-        WHERE m.channel_id = ? AND m.thread_id IS NULL
-        ON CONFLICT(user_id, thread_id) DO UPDATE SET last_read_reply_id = MAX(last_read_reply_id, excluded.last_read_reply_id)
-      `).run(socket.user.id, channel.id);
+      if (!await readPositions.markForumRead(socket.user.id, code, socket.user.isAdmin)) return;
       for (const [, s] of io.sockets.sockets) {
         if (s.user && s.user.id === socket.user.id) s.emit('forum-read', { channelCode: code });
       }
@@ -3082,20 +3085,11 @@ module.exports = function register(socket, ctx) {
 
   // A reply that lands while you have the thread open on screen has been
   // seen: record it so a reload, or another device, does not flag it (#5641).
-  socket.on('mark-thread-read', (data) => {
+  socket.on('mark-thread-read', async (data) => {
     if (!data || typeof data !== 'object' || !isInt(data.parentId)) return;
-    const parentRow = db.prepare(
-      'SELECT m.id, m.channel_id, c.code as channel_code FROM messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = ? AND m.thread_id IS NULL'
-    ).get(data.parentId);
-    if (!parentRow) return;
-    const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(parentRow.channel_id, socket.user.id);
-    if (!member && !socket.user.isAdmin) return;
     try {
-      db.prepare(`
-        INSERT INTO thread_reads (user_id, thread_id, last_read_reply_id)
-        VALUES (?, ?, COALESCE((SELECT MAX(id) FROM messages WHERE thread_id = ?), 0))
-        ON CONFLICT(user_id, thread_id) DO UPDATE SET last_read_reply_id = MAX(last_read_reply_id, excluded.last_read_reply_id)
-      `).run(socket.user.id, data.parentId, data.parentId);
+      const parentRow = await readPositions.markThreadRead(socket.user.id, data.parentId, socket.user.isAdmin);
+      if (!parentRow) return;
       for (const [, s] of io.sockets.sockets) {
         if (s !== socket && s.user && s.user.id === socket.user.id) s.emit('thread-read', { channelCode: parentRow.channel_code, parentId: data.parentId });
       }
@@ -3240,6 +3234,7 @@ module.exports = function register(socket, ctx) {
         if (!reactionMap.has(r.message_id)) reactionMap.set(r.message_id, []);
         reactionMap.get(r.message_id).push({ emoji: r.emoji, user_id: r.user_id, username: r.username });
       });
+      ferryReactions.mergeInto(db, msgIds, reactionMap);
     }
 
     // Attachment tags on the replies' pictures, for their footers and the

@@ -4,69 +4,79 @@
 //           notifications, volume sliders, status bar
 // ═══════════════════════════════════════════════════════════
 
-import SocketMethods   from './modules/app-socket.js?v=4.26.5';
-import SocketChannelMethods from './modules/app-socket-channels.js?v=4.26.11';
-import SocketEventMethods from './modules/app-socket-events.js?v=4.26.14-bazaar-5';
-import UIBindMethods   from './modules/app-ui.js?v=4.27.21';
-import ComposerMethods from './modules/app-composer.js?v=4.25.26';
+import SocketMethods   from './modules/app-socket.js?v=4.29.55';
+import SocketChannelMethods from './modules/app-socket-channels.js?v=4.29.25';
+import SocketEventMethods from './modules/app-socket-events.js?v=4.29.30-bazaar-1';
+import UIBindMethods   from './modules/app-ui.js?v=4.29.18';
+import ComposerMethods from './modules/app-composer.js?v=4.29.11';
+import ScheduleFileMethods from './modules/app-schedule-files.js?v=4.27.24';
+import DraftMethods from './modules/app-drafts.js?v=4.29.11';
+import WhatsNewMethods from './modules/app-whats-new.js?v=4.27.25';
 import ComposerListMethods from './modules/app-composer-lists.js?v=4.22.22';
-import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.26.5';
-import VoiceControlMethods from './modules/app-voice-controls.js?v=4.27.22';
-import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.26.8';
-import MessageActionMethods from './modules/app-message-actions.js?v=4.26.9-bazaar-1';
-import PipPanelMethods from './modules/app-pip-panels.js?v=4.26.13';
-import PeopleMethods from './modules/app-people.js?v=4.25.28';
+import ChannelMenuMethods from './modules/app-channel-menu.js?v=4.29.56';
+import VoiceControlMethods from './modules/app-voice-controls.js?v=4.27.57';
+import MediaGalleryMethods from './modules/app-media-gallery.js?v=4.27.52';
+import MessageActionMethods from './modules/app-message-actions.js?v=4.29.40-bazaar-1';
+import PipPanelMethods from './modules/app-pip-panels.js?v=4.29.50';
+import PeopleMethods from './modules/app-people.js?v=4.29.54';
 import SettingsMethods from './modules/app-settings.js?v=4.23.9';
-import AdminControlMethods from './modules/app-admin-controls.js?v=4.27.15';
+import AdminControlMethods from './modules/app-admin-controls.js?v=4.27.52';
 import AdminReauthMethods from './modules/app-admin-reauth.js?v=4.23.8';
 import ExtensionUpdateMethods from './modules/app-extension-updates.js?v=4.17.18';
-import ServerBarMethods from './modules/app-server-bar.js?v=4.23.9';
-import MobileMethods from './modules/app-mobile.js?v=4.24.24';
-import MediaMethods    from './modules/app-media.js?v=4.27.5';
+import ServerBarMethods from './modules/app-server-bar.js?v=4.29.55';
+import MobileMethods from './modules/app-mobile.js?v=4.29.50';
+import MediaMethods    from './modules/app-media.js?v=4.27.57';
 import ImageZoomMethods from './modules/app-image-zoom.js?v=4.25.20';
-import MediaGridMethods from './modules/app-media-grid.js?v=4.26.17';
+import MediaGridMethods from './modules/app-media-grid.js?v=4.27.31';
 import FeedAnchorMethods from './modules/app-feed-anchor.js?v=4.25.26';
 import AttachmentMethods from './modules/app-attachments.js?v=4.26.17';
-import AvatarEditorMethods from './modules/app-avatar-editor.js?v=4.25.28';
-import AppearanceMethods from './modules/app-appearance.js?v=4.27.7';
+import AvatarEditorMethods from './modules/app-avatar-editor.js?v=4.29.2';
+import AppearanceMethods from './modules/app-appearance.js?v=4.27.49';
 import AccessibilityMethods from './modules/app-accessibility.js?v=4.27.19';
 import SoundMethods from './modules/app-sounds.js?v=4.25.21';
-import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.21.0';
-import BotMethods from './modules/app-bots.js?v=4.23.9';
+import EmojiStickerMethods from './modules/app-emoji-stickers.js?v=4.29.12';
+import EmojiSearchMethods from './modules/app-emoji-search.js?v=4.29.12';
+import BotMethods from './modules/app-bots.js?v=4.27.52';
 import ContextMethods  from './modules/app-context.js?v=4.27.10';
-import ChannelMethods  from './modules/app-channels.js?v=4.25.8-bazaar-1';
-import ChannelContextMethods from './modules/app-channel-context.js?v=4.27.1-bazaar-1';
-import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.25.11';
-import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.24.32-bazaar-2';
-import MessageMethods  from './modules/app-messages.js?v=4.27.7-bazaar-1';
-import LinkPreviewMethods from './modules/app-link-previews.js?v=4.26.9';
-import MessageToolMethods from './modules/app-message-tools.js?v=4.26.14';
-import MoveToThreadMethods from './modules/app-move-to-thread.js?v=4.24.29-bazaar-1';
-import UserMethods     from './modules/app-users.js?v=4.27.14';
+import ChannelMethods  from './modules/app-channels.js?v=4.29.56-bazaar-1';
+import ChannelContextMethods from './modules/app-channel-context.js?v=4.29.56-bazaar-1';
+import ChannelTypeMethods from './modules/app-channel-types.js?v=4.27.42';
+import ChannelOrganizeMethods from './modules/app-channel-organize.js?v=4.29.63';
+import ChannelUnreadMethods from './modules/app-channel-unread.js?v=4.29.30-bazaar-1';
+import DmPinMethods from './modules/app-dm-pins.js?v=4.29.30';
+import MessageMethods  from './modules/app-messages.js?v=4.29.13-bazaar-1';
+import LinkPreviewMethods from './modules/app-link-previews.js?v=4.29.63';
+import MessageToolMethods from './modules/app-message-tools.js?v=4.29.40';
+import MoveToThreadMethods from './modules/app-move-to-thread.js?v=4.29.40-bazaar-1';
+import UnthreadMethods from './modules/app-unthread.js?v=4.29.40';
+import UserMethods     from './modules/app-users.js?v=4.27.52';
 import BirthdayMethods from './modules/app-birthdays.js?v=4.23.11';
-import VoiceMethods    from './modules/app-voice.js?v=4.26.11';
+import VoiceMethods    from './modules/app-voice.js?v=4.29.11';
 import ThemePickerMethods from './modules/app-theme-picker.js?v=4.25.30';
 import PushToMuteMethods from './modules/app-push-to-mute.js?v=4.24.5';
-import ScreenWebcamMethods from './modules/app-screen-webcam.js?v=4.24.20';
-import StreamTileMethods from './modules/app-stream-tiles.js?v=4.23.9';
+import ScreenWebcamMethods from './modules/app-screen-webcam.js?v=4.27.56';
+import StreamTileMethods from './modules/app-stream-tiles.js?v=4.27.56';
 import MusicMethods from './modules/app-music.js?v=4.27.17';
-import MusicFileMethods from './modules/app-music-file.js?v=4.27.17';
+import MusicFileMethods from './modules/app-music-file.js?v=4.27.49';
 import MusicKeyMethods from './modules/app-music-keys.js?v=4.24.19';
-import UtilityMethods  from './modules/app-utilities.js?v=4.27.14-bazaar-2';
-import MessageContentMethods from './modules/app-message-content.js?v=4.27.18-bazaar-2';
-import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.25.2';
-import GifPickerMethods from './modules/app-gif-picker.js?v=4.25.6';
-import ThreadMethods from './modules/app-threads.js?v=4.27.20-bazaar-4';
-import AdminMethods    from './modules/app-admin.js?v=4.27.4';
-import BrandingMethods from './modules/app-branding.js?v=4.21.0';
-import MembersAdminMethods from './modules/app-members-admin.js?v=4.27.3';
-import AutocompleteMethods from './modules/app-autocomplete.js?v=4.26.12';
-import StatusMethods from './modules/app-status.js?v=4.21.0';
-import DiscordImportMethods from './modules/app-discord-import.js?v=4.26.15';
-import RoleMethods from './modules/app-roles.js?v=4.27.14';
+import UtilityMethods  from './modules/app-utilities.js?v=4.29.12-bazaar-1';
+import MessageContentMethods from './modules/app-message-content.js?v=4.29.55-bazaar-1';
+import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.29.50';
+import GifPickerMethods from './modules/app-gif-picker.js?v=4.29.20';
+import ThreadMethods from './modules/app-threads.js?v=4.29.50-bazaar-1';
+import AdminMethods    from './modules/app-admin.js?v=4.29.20';
+import BrandingMethods from './modules/app-branding.js?v=4.29.19';
+import MembersAdminMethods from './modules/app-members-admin.js?v=4.27.52';
+import AutocompleteMethods from './modules/app-autocomplete.js?v=4.29.12';
+import StatusMethods from './modules/app-status.js?v=4.29.2';
+import DiscordImportMethods from './modules/app-discord-import.js?v=4.27.52';
+import RoleMethods from './modules/app-roles.js?v=4.27.52';
 import RoleAssignMethods from './modules/app-role-assign.js?v=4.26.16';
 import ModerationMethods from './modules/app-moderation.js?v=4.27.9';
-import PlatformMethods from './modules/app-platform.js?v=4.27.16';
+import PlatformMethods from './modules/app-platform.js?v=4.27.49';
+import SearchMethods   from './modules/app-search.js?v=4.29.18';
+import FerryMethods    from './modules/app-ferry.js?v=4.27.52';
+import ForumMethods    from './modules/app-forum.js?v=4.29.55-bazaar-1';
 import BazaarRoleBotMethods from './modules/app-bazaar-role-bot.js?v=bazaar-3'; // Bizarre Bazaar fork
 import BazaarEventMethods from './modules/app-bazaar-events.js?v=bazaar-1'; // Bizarre Bazaar fork
 import BazaarDiscordRefMethods from './modules/app-bazaar-discord-refs.js?v=bazaar-3'; // Bizarre Bazaar fork
@@ -75,37 +85,42 @@ import BazaarThreadPageMethods from './modules/app-bazaar-thread-pages.js?v=baza
 import BazaarThreadPinMethods from './modules/app-bazaar-thread-pins.js?v=bazaar-2'; // Bizarre Bazaar fork
 import BazaarBannerMethods from './modules/app-bazaar-banners.js?v=bazaar-2'; // Bizarre Bazaar fork
 import BazaarThreadMenuMethods from './modules/app-bazaar-thread-menu.js?v=bazaar-1'; // Bizarre Bazaar fork
-import SearchMethods   from './modules/app-search.js?v=4.24.32';
-import FerryMethods    from './modules/app-ferry.js?v=4.24.10';
-import ForumMethods    from './modules/app-forum.js?v=4.27.13-bazaar-2';
 import ForumBlogMethods from './modules/app-forum-blog.js?v=4.26.4';
 import ForumVoteMethods from './modules/app-forum-votes.js?v=4.24.3';
 import ForumPictureVoteMethods from './modules/app-forum-picture-votes.js?v=4.24.3';
-import RoleToolMethods from './modules/app-role-tools.js?v=4.26.5';
-import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.26.1';
+import RoleToolMethods from './modules/app-role-tools.js?v=4.29.20';
+import ChannelAddMemberMethods from './modules/app-channel-add-members.js?v=4.29.16';
+import PermMatrixMethods from './modules/app-perm-matrix.js?v=4.27.51';
 import CallMethods from './modules/app-calls.js?v=4.22.24';
 import ScalingMethods from './modules/app-scaling.js?v=4.14.3';
-import GroupMethods from './modules/app-groups.js?v=4.27.7';
+import GroupMethods from './modules/app-groups.js?v=4.27.52';
 import TemplateMethods from './modules/app-templates.js?v=4.18.7';
 import MemberDefaultsMethods from './modules/app-member-defaults.js?v=4.22.9';
 import LoginBrandingMethods from './modules/app-login-branding.js?v=4.27.4';
 import MessageHighlightMethods from './modules/app-message-highlights.js?v=4.22.2';
 import MessageGroupingMethods from './modules/message-grouping.js?v=4.25.1';
 import ModCaseMethods from './modules/app-mod-cases.js?v=4.22.14';
-import MasterVolumeMethods from './modules/app-master-volume.js?v=4.25.21';
+import BlockedNameMethods from './modules/app-blocked-names.js?v=4.29.15';
+import MasterVolumeMethods from './modules/app-master-volume.js?v=4.27.56';
 import ServerMuteMethods from './modules/app-server-mute.js?v=4.24.24';
 import ForumUnreadMethods from './modules/app-forum-unread.js?v=4.21.2';
 import ThreadUnreadMethods from './modules/app-thread-unread.js?v=4.27.20';
 import ThreadDockMethods from './modules/app-thread-dock.js?v=4.25.7';
+import NavHistoryMethods from './modules/app-nav-history.js?v=4.29.50';
 import TypingMethods from './modules/app-typing.js?v=4.25.8';
 import MessageNsfwMethods from './modules/app-message-nsfw.js?v=4.25.10';
-import MediaPlaybackMethods from './modules/app-media-playback.js?v=4.27.6';
+import MediaPlaybackMethods from './modules/app-media-playback.js?v=4.27.49';
 import PermDraftMethods from './modules/app-perm-draft.js?v=4.26.1';
 import ThreadScrollMethods from './modules/app-thread-scroll.js?v=4.24.26.1';
 import ChannelCategoryMethods from './modules/app-channel-categories.js?v=4.22.2';
 import ChannelPersonalOrderMethods from './modules/app-channel-personal-order.js?v=4.22.23';
 import BadgeMethods from './modules/app-badges.js?v=4.24.15';
 import SilentMethods from './modules/app-silent.js?v=4.24.32';
+import MentionsMethods from './modules/app-mentions.js?v=4.29.11';
+import SettingsPageMethods from './modules/app-settings-pages.js?v=4.29.55';
+import EmojiChooseMethods from './modules/app-emoji-choose.js?v=4.29.12';
+import { startGlyphIcons } from './modules/glyph-icons.js?v=4.27.36';
+import { startTooltips } from './modules/tooltips.js?v=4.27.51';
 
 class HavenApp {
   constructor() {
@@ -194,15 +209,16 @@ class HavenApp {
     // Emoji palette organized by category
     this.emojiCategories = {
       'Smileys':  ['😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😎','😍','🥰','😘','🙂','🤗','🤩','🤔','😐','🙄','😏','😣','😥','😮','😯','😴','😛','😜','😝','😒','😔','🙃','😲','😤','😭','😢','😱','🥺','😠','😡','🤬','😈','💀','💩','🤡','👻','😺','😸','🫠','🫣','🫢','🫥','🫤','🥹','🥲','😶‍🌫️','🤭','🫡','🤫','🤥','😬','🫨','😵','😵‍💫','🥴','😮‍💨','😤','🥱','😇','🤠','🤑','🤓','😈','👿','🫶','🤧','😷','🤒','🤕','💅'],
-      'People':   ['👋','🤚','✋','🖖','👌','🤌','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','🤝','🙏','💪','🫡','🫶','💅','💃','🕺','🤳','🖕','🫰','🫳','🫴','👐','🤲','🫱','🫲','🤷','🤦','🙇','💁','🙆','🙅','🤷‍♂️','🤷‍♀️','🙋','🙋‍♂️','🙋‍♀️','🧏','🧑‍🤝‍🧑','👫','👬','👭'],
+      'People':   ['👋','🤚','✋','🖖','👌','🤌','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','🤝','🙏','💪','🫡','🫶','💅','💃','🕺','🤳','🖕','🫰','🫳','🫴','👐','🤲','🫱','🫲','🤷‍♂️','🤷‍♀️','🤦‍♂️','🤦‍♀️','🙇‍♂️','🙇‍♀️','💁‍♂️','💁‍♀️','🙆‍♂️','🙆‍♀️','🙅‍♂️','🙅‍♀️','🙋‍♂️','🙋‍♀️','🧏‍♂️','🧏‍♀️','👫','👬','👭'],
       'Monkeys':  ['🙈','🙉','🙊','🐵','🐒','🦍','🦧'],
       'Animals':  ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐔','🐧','🐦','🦆','🦅','🦉','🐺','🐴','🦄','🐝','🦋','🐌','🐞','🐢','🐍','🐙','🐬','🐳','🦈','🐊','🦖','🦕','🐋','🦭','🦦','🦫','🦥','🐿️','🦔','🦇','🐓','🦃','🦚','🦜','🦢','🦩','🐕','🐈','🐈‍⬛'],
       'Faces':    ['👀','👁️','👁️‍🗨️','👅','👄','🫦','💋','🧠','🦷','🦴','👃','👂','🦻','🦶','🦵','💀','☠️','👽','🤖','🎃','😺','😸','😹','😻','😼','😽','🙀','😿','😾'],
       'Food':     ['🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍒','🍑','🥭','🍍','🥝','🍅','🥑','🌽','🌶️','🫑','🥦','🧄','🧅','🥕','🍕','🍔','🍟','🌭','🍿','🧁','🍩','🍪','🍰','🎂','🧀','🥚','🥓','🥩','🍗','🌮','🌯','🫔','🥙','🍜','🍝','🍣','🍱','☕','🍺','🍻','🍷','🥤','🧊','🧋','🍵','🥂','🍾','🥃','🍶','🫗','🍸','🍹'],
-      'Activities':['⚽','🏀','🏈','⚾','🎾','🏐','🎱','🏓','🎮','🕹️','🎲','🧩','🎯','🎳','🎭','🎨','🎼','🎵','🎶','🎸','🥁','🎹','🏆','🥇','🏅','🎪','🎬','🎤','🎧','🎺','🪘','🎻','🪗','🎉','🎊','🎈','🎀','🎗️','🏋️','🤸','🧗','🏄','🏊','🚴','⛷️','🏂','🤺'],
+      'Activities':['⚽','🏀','🏈','⚾','🎾','🏐','🎱','🏓','🎮','🕹️','🎲','🧩','🎯','🎳','🎭','🎨','🎼','🎵','🎶','🎸','🥁','🎹','🏆','🥇','🏅','🎪','🎬','🎤','🎧','🎺','🪘','🎻','🪗','🎉','🎊','🎈','🎀','🎗️','🏋️‍♂️','🏋️‍♀️','🤸‍♂️','🤸‍♀️','🧗‍♂️','🧗‍♀️','🏄‍♂️','🏄‍♀️','🏊‍♂️','🏊‍♀️','🚴‍♂️','🚴‍♀️','⛷️','🏂','🤺'],
       'Travel':   ['🚗','🚕','🚀','✈️','🚁','🛸','🚢','🏠','🏢','🏰','🗼','🗽','⛩️','🌋','🏔️','🌊','🌅','🌄','🌉','🎡','🎢','🗺️','🧭','🏖️','🏕️','🌍','🌎','🌏','🛳️','⛵','🚂','🚇','🏎️','🏍️','🛵','🛶'],
       'Objects':  ['⌚','📱','💻','⌨️','🖥️','💾','📷','🔭','🔬','💡','🔦','📚','📝','✏️','📎','📌','🔑','🔒','🔓','🛡️','⚔️','🔧','💰','💎','📦','🎁','✉️','🔔','🪙','💸','🏷️','🔨','🪛','🧲','🧪','🧫','💊','🩺','🩹','🧬','💬','💭','🗨️','🗯️','📣','📢','🔊','🔇','📰','🗞️','📋','📁','📂','🗂️','📅','📆','🗓️','🖊️','🖋️','✒️','📏','📐','🗑️','👑','💍','👒','🎩','🧢','👓','🕶️','🧳','🌂','☂️'],
       'Symbols':  ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💝','✨','⭐','🌟','💫','🔥','💯','✅','❌','❗','❓','❕','❔','‼️','⁉️','!','?',',','.','💤','🚫','⚠️','♻️','🏳️','🏴','🎵','➕','➖','➗','💲','♾️','🔴','🟠','🟡','🟢','🔵','🟣','⚫','⚪','🟤','🔶','🔷','🔺','🔻','💠','🔘','🏳️‍🌈','🏴‍☠️','⚡','☀️','🌙','🌈','☁️','❄️','💨','🌪️','☮️','✝️','☪️','🕉️','☯️','✡️','🔯','♈','♉','♊','♋','♌','♍','♎','♏','♐','♑','♒','♓','⛎','🆔','⚛️','🈶','🈚','🈸','🈺','🈷️','🆚','🉐','🈹','🈲','🉑','🈴','🈳','㊗️','㊙️','🈵','🔅','🔆','🔱','📛','♻️','🔰','⭕','✳️','❇️','🔟','🔠','🔡','🔢','🔣','🔤','🆎','🆑','🆒','🆓','ℹ️','🆕','🆖','🅾️','🆗','🅿️','🆘','🆙','🆚','🈁','🈂️','💱','💲','#️⃣','*️⃣','0️⃣','1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟','©️','®️','™️'],
+      'Platforms': [':os_windows:',':os_mac:',':os_ios:',':os_android:',':os_linux:'],
       'Flags':    [':flag_us:',':us_betsy_ross:',':gadsden:',':flag_gb:',':flag_ca:',':flag_au:',':flag_nz:',':flag_ie:',':flag_fr:',':flag_de:',':flag_it:',':flag_es:',':flag_pt:',':flag_nl:',':flag_be:',':flag_lu:',':flag_ch:',':flag_at:',':flag_dk:',':flag_no:',':flag_se:',':flag_fi:',':flag_is:',':flag_pl:',':flag_ee:',':flag_lv:',':flag_lt:',':flag_cz:',':flag_sk:',':flag_hu:',':flag_ro:',':flag_bg:',':flag_si:',':flag_hr:',':flag_gr:',':flag_al:',':flag_me:',':flag_mk:',':flag_ua:',':flag_tr:',':flag_jp:',':flag_kr:',':flag_tw:',':flag_ph:',':flag_th:',':flag_sg:',':flag_in:',':flag_id:',':flag_my:',':flag_vn:',':flag_mn:',':flag_bd:',':flag_lk:',':flag_np:',':flag_il:',':flag_sa:',':flag_ae:',':flag_qa:',':flag_bh:',':flag_kw:',':flag_om:',':flag_jo:',':flag_eg:',':flag_ma:',':flag_tn:',':flag_mx:',':flag_br:',':flag_ar:',':flag_cl:',':flag_co:',':flag_pe:',':flag_uy:',':flag_ec:',':flag_cr:',':flag_pa:',':flag_gt:',':flag_do:',':flag_jm:',':flag_bs:',':flag_tt:',':flag_za:',':flag_ke:',':flag_ng:',':flag_gh:',':flag_sn:',':flag_rw:',':flag_bw:',':flag_ci:',':flag_tz:']
     };
 
@@ -212,7 +228,7 @@ class HavenApp {
     // Emoji name map for search (emoji → keywords)
     this.emojiNames = {
       '😀':'grinning happy','😁':'beaming grin','😂':'joy tears laughing lol','🤣':'rofl rolling laughing','😃':'smiley happy','😄':'smile happy','😅':'sweat nervous','😆':'laughing satisfied','😉':'wink','😊':'blush happy shy','😋':'yummy delicious','😎':'cool sunglasses','😍':'heart eyes love','🥰':'loving smiling hearts','😘':'kiss blowing','🙂':'slight smile','🤗':'hug hugging open hands','🤩':'starstruck star eyes','🤔':'thinking hmm','😐':'neutral expressionless','🙄':'eye roll','😏':'smirk','😣':'persevere','😥':'sad relieved disappointed','😮':'open mouth wow surprised','😯':'hushed surprised','😴':'sleeping zzz','😛':'tongue playful','😜':'wink tongue crazy','😝':'squinting tongue','😒':'unamused','😔':'pensive sad','🙃':'upside down','😲':'astonished shocked','😤':'triumph huff angry steam','😭':'crying sob loudly','😢':'cry sad tear','😱':'scream fear horrified','🥺':'pleading puppy eyes please','😠':'angry mad','😡':'rage pouting furious','🤬':'cursing swearing angry','😈':'devil smiling imp','💀':'skull dead','💩':'poop poo','🤡':'clown','👻':'ghost boo','😺':'cat smile','😸':'cat grin','🫠':'melting face','🫣':'peeking eye','🫢':'hand over mouth','🫥':'dotted line face','🫤':'diagonal mouth','🥹':'holding back tears','🥲':'smile tear','😶‍🌫️':'face in clouds','🤭':'giggling hand over mouth','🫡':'salute','🤫':'shush quiet secret','🤥':'lying pinocchio','😬':'grimace awkward','🫨':'shaking face','😵':'dizzy','😵‍💫':'face spiral eyes','🥴':'woozy drunk','😮‍💨':'exhale sigh relief','🥱':'yawn tired boring','😇':'angel innocent halo','🤠':'cowboy yeehaw','🤑':'money face rich','🤓':'nerd glasses','👿':'devil angry imp','🫶':'heart hands','🤧':'sneeze sick','😷':'mask sick','🤒':'thermometer sick','🤕':'bandage hurt','💅':'nail polish sassy',
-      '👋':'wave hello hi bye','🤚':'raised back hand','✋':'hand stop high five','🖖':'vulcan spock','👌':'ok okay perfect','🤌':'pinched italian','✌️':'peace victory','🤞':'crossed fingers luck','🤟':'love you hand','🤘':'rock on metal','🤙':'call me shaka hang loose','👈':'point left','👉':'point right','👆':'point up','👇':'point down','☝️':'index up','👍':'thumbs up like good yes','👎':'thumbs down dislike bad no','✊':'fist bump','👊':'punch fist bump','🤛':'left fist bump','🤜':'right fist bump','👏':'clap applause','🙌':'raising hands celebrate','🤝':'handshake deal','🙏':'pray please thank you namaste','💪':'strong muscle flex bicep','💃':'dancer dancing woman','🕺':'man dancing','🤳':'selfie','🖕':'middle finger','🫰':'pinch','🫳':'palm down','🫴':'palm up','👐':'open hands','🤲':'palms up','🫱':'right hand','🫲':'left hand','🤷':'shrug idk','🤦':'facepalm','🙇':'bow','💁':'info','🙆':'ok gesture','🙅':'no gesture','🙋':'raising hand hi','🧏':'deaf',
+      '👋':'wave hello hi bye','🤚':'raised back hand','✋':'hand stop high five','🖖':'vulcan spock','👌':'ok okay perfect','🤌':'pinched italian','✌️':'peace victory','🤞':'crossed fingers luck','🤟':'love you hand','🤘':'rock on metal','🤙':'call me shaka hang loose','👈':'point left','👉':'point right','👆':'point up','👇':'point down','☝️':'index up','👍':'thumbs up like good yes','👎':'thumbs down dislike bad no','✊':'fist bump','👊':'punch fist bump','🤛':'left fist bump','🤜':'right fist bump','👏':'clap applause','🙌':'raising hands celebrate','🤝':'handshake deal','🙏':'pray please thank you namaste','💪':'strong muscle flex bicep','💃':'dancer dancing woman','🕺':'man dancing','🤳':'selfie','🖕':'middle finger','🫰':'pinch','🫳':'palm down','🫴':'palm up','👐':'open hands','🤲':'palms up','🫱':'right hand','🫲':'left hand','🤷‍♂️':'man shrug idk','🤷‍♀️':'woman shrug idk','🤦‍♂️':'man facepalm','🤦‍♀️':'woman facepalm','🙇‍♂️':'man bow','🙇‍♀️':'woman bow','💁‍♂️':'man info','💁‍♀️':'woman info','🙆‍♂️':'man ok gesture','🙆‍♀️':'woman ok gesture','🙅‍♂️':'man no gesture','🙅‍♀️':'woman no gesture','🙋‍♂️':'man raising hand hi','🙋‍♀️':'woman raising hand hi','🧏‍♂️':'man deaf','🧏‍♀️':'woman deaf',
       '🐶':'dog puppy','🐱':'cat kitty','🐭':'mouse','🐹':'hamster','🐰':'rabbit bunny','🦊':'fox','🐻':'bear','🐼':'panda','🐨':'koala','🐯':'tiger','🦁':'lion','🐮':'cow','🐷':'pig','🐸':'frog','🐔':'chicken','🐧':'penguin','🐦':'bird','🦆':'duck','🦅':'eagle','🦉':'owl','🐺':'wolf','🐴':'horse','🦄':'unicorn','🐝':'bee','🦋':'butterfly','🐌':'snail','🐞':'ladybug','🐢':'turtle','🐍':'snake','🐙':'octopus','🐬':'dolphin','🐳':'whale','🦈':'shark','🐊':'crocodile alligator','🦖':'trex dinosaur','🦕':'dinosaur brontosaurus',
       '🍎':'apple red','🍐':'pear','🍊':'orange tangerine','🍋':'lemon','🍌':'banana','🍉':'watermelon','🍇':'grapes','🍓':'strawberry','🍒':'cherry','🍑':'peach','🍍':'pineapple','🍕':'pizza','🍔':'burger hamburger','🍟':'fries french','🌭':'hotdog','🍿':'popcorn','🧁':'cupcake','🍩':'donut','🍪':'cookie','🍰':'cake','🎂':'birthday cake','🧀':'cheese','🥚':'egg','🥓':'bacon','🌮':'taco','🍜':'noodles ramen','🍝':'spaghetti pasta','🍣':'sushi','☕':'coffee','🍺':'beer','🍻':'clinking beers cheers toast','🍷':'wine','🍾':'champagne','🥂':'clinking glasses cheers toast','🥃':'tumbler whiskey bourbon','🍶':'sake','🫗':'pouring liquid','🍸':'cocktail martini','🍹':'tropical drink',
       '⚽':'soccer football','🏀':'basketball','🏈':'football american','🎮':'gaming controller video game','🕹️':'joystick arcade','🎲':'dice','🧩':'puzzle jigsaw','🎯':'bullseye target dart','🎨':'art palette paint','🎵':'music note','🎶':'music notes melody song','🎸':'guitar','🏆':'trophy winner','🎧':'headphones music','🎤':'microphone karaoke sing','🎉':'party popper celebration tada','🎊':'confetti ball celebrate','🎈':'balloon party','🎀':'ribbon bow','🎗️':'reminder ribbon',
@@ -350,6 +366,13 @@ class HavenApp {
       { name: 'flag_tz', url: '/emoji/flags/tz.svg', keywords: 'tanzania flag' },
       { name: 'us_betsy_ross', url: '/emoji/us-betsy-ross.svg', keywords: 'betsy ross flag united states america usa stars stripes colonies historical patriotic' },
       { name: 'gadsden', url: '/emoji/us-gadsden.svg', keywords: 'gadsden dont tread on me snake rattlesnake flag united states america usa liberty patriotic' },
+      // Platforms, for roles like Windows or Android. Drawn for Haven; see
+      // emoji/platforms/ATTRIBUTION.txt.
+      { name: 'os_windows', url: '/emoji/platforms/windows.svg', keywords: 'windows microsoft pc computer os platform' },
+      { name: 'os_mac', url: '/emoji/platforms/mac.svg', keywords: 'mac macos macintosh apple computer os platform' },
+      { name: 'os_ios', url: '/emoji/platforms/ios.svg', keywords: 'ios iphone ipad apple phone mobile os platform' },
+      { name: 'os_android', url: '/emoji/platforms/android.svg', keywords: 'android google phone mobile robot os platform' },
+      { name: 'os_linux', url: '/emoji/platforms/linux.svg', keywords: 'linux tux penguin gnu os platform' },
     ];
     this.stickers = []; // [{id, name, pack_name, url}], loaded from server
     this._emojiPickerContext = 'main'; // 'main' | 'thread' | 'dmpip', set by emoji button handlers
@@ -361,6 +384,8 @@ class HavenApp {
   // ── Initialization ────────────────────────────────────
 
   _init() {
+    startGlyphIcons();
+    startTooltips();
     // Kick this off before anything can render a message. Until it resolves,
     // _imgSrcAttr parks remote images in data-mp-src rather than emitting a
     // raw external src, so there is no window in which an image leaks. (v3.43.0)
@@ -372,10 +397,17 @@ class HavenApp {
     // Link policy for decrypted DM content (#5483). Requested once the socket
     // exists, below, since it travels over the authenticated connection.
 
+    // One id for this page, the same across its reconnects, so the server
+    // can drop the socket this page just replaced without touching another
+    // tab or device (#5875). It is kept in memory only: a duplicated tab
+    // copies sessionStorage, and two tabs sharing an id would keep closing
+    // each other's connection.
+    const tabId = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
+
     this.socket = io({
       // presenceDeltas: this client merges member-list changes
       // (online-users-delta) instead of needing every list in full.
-      auth: { token: this.token, presenceDeltas: 1 },
+      auth: { token: this.token, presenceDeltas: 1, tabId },
       reconnectionDelay: 1500,
       reconnectionDelayMax: 10000,
       randomizationFactor: 0.4,
@@ -390,6 +422,7 @@ class HavenApp {
     this._setupAvatarUpload();
 
     this._setupSocketListeners();
+    this._setupChannelTypes();
     this._initLinkPolicy?.();
     this._setupUI();
     this._setupThemes();
@@ -419,6 +452,7 @@ class HavenApp {
     this._setupDiscordImport();
     this._setupServerTemplates();
     this._setupAuditLog();
+    this._setupBlockedNames();
     this._initRoleManagement();
     this._initPermMatrix();
     this._initServerBranding();
@@ -434,6 +468,7 @@ class HavenApp {
     this._setupAccessibility();
     this._setupEmojiSizePicker();
     this._setupImageModePicker();
+    this._setupHideMedia();
     this._setupLazyMedia();
     this._setupFeedAnchor();
     this._setupEmbedSizePicker();
@@ -450,6 +485,7 @@ class HavenApp {
     this._setupThreadUnread();
     this._setupThreadScroll();
     this._setupThreadDock();
+    this._setupNavHistory();
     this._setupTyping();
     this._setupMessageNsfw();
     this._setupMediaPlayback();
@@ -473,6 +509,7 @@ class HavenApp {
     this._bazaarSetupThreadMenu(); // Bizarre Bazaar fork
     this._initMoveMessages();
     this._initMoveToThread();
+    this._initUnthread();
 
     // CSP-safe image error handling (no inline onerror attributes)
     // For avatar images, hide the broken img and show the letter-initial fallback
@@ -488,6 +525,7 @@ class HavenApp {
     document.getElementById('messages')?.addEventListener('error', avatarErrorHandler, true);
     document.getElementById('online-users')?.addEventListener('error', avatarErrorHandler, true);
     this._setupHeldUploadNotes();
+    this._setupSettingsPages();
 
     this.socket.emit('get-channels');
     this.socket.emit('get-server-settings');
@@ -503,6 +541,8 @@ class HavenApp {
     document.getElementById('current-user').textContent = this.user.displayName || this.user.username;
     const loginEl = document.getElementById('login-name');
     if (loginEl) loginEl.textContent = `@${this.user.username}`;
+    this._renderUserBarAvatar();
+    this._mentionsInit();
 
     if (this.user.isAdmin || this._hasGlobalPerm('create_channel')) {
       document.getElementById('admin-controls').style.display = 'block';
@@ -566,6 +606,7 @@ class HavenApp {
 // ── Merge all method groups onto the prototype ────────────
 Object.assign(HavenApp.prototype,
   SocketMethods,
+  EmojiChooseMethods,
   SocketChannelMethods,
   SocketEventMethods,
   UIBindMethods,
@@ -579,6 +620,8 @@ Object.assign(HavenApp.prototype,
   PeopleMethods,
   SettingsMethods,
   AdminControlMethods,
+  BlockedNameMethods,
+  ChannelAddMemberMethods,
   ExtensionUpdateMethods,
   ServerBarMethods,
   MobileMethods,
@@ -592,6 +635,7 @@ Object.assign(HavenApp.prototype,
   AccessibilityMethods,
   SoundMethods,
   EmojiStickerMethods,
+  EmojiSearchMethods,
   BotMethods,
   ContextMethods,
   ChannelMethods,
@@ -608,6 +652,9 @@ Object.assign(HavenApp.prototype,
   StreamTileMethods,
   MusicMethods,
   MusicFileMethods,
+  ScheduleFileMethods,
+  DraftMethods,
+  WhatsNewMethods,
   MusicKeyMethods,
   UtilityMethods,
   MessageContentMethods,
@@ -650,23 +697,29 @@ Object.assign(HavenApp.prototype,
   MessageGroupingMethods,
   ModCaseMethods,
   ServerMuteMethods,
+  DmPinMethods,
   AdminReauthMethods,
   MasterVolumeMethods,
   ForumUnreadMethods,
   ThreadUnreadMethods,
   ThreadDockMethods,
+  NavHistoryMethods,
   TypingMethods,
   MessageNsfwMethods,
   MediaPlaybackMethods,
   PermDraftMethods,
   ThreadScrollMethods,
   MoveToThreadMethods,
+  UnthreadMethods,
   ChannelCategoryMethods,
   ChannelPersonalOrderMethods,
   PushToMuteMethods,
   BadgeMethods,
   ThemePickerMethods,
   SilentMethods,
+  SettingsPageMethods,
+  ChannelTypeMethods,
+  MentionsMethods,
 );
 
 // ── Boot ───────────────────────────────────────────────

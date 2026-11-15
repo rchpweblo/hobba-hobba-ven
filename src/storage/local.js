@@ -102,7 +102,7 @@ class LocalStorage {
   async *list(prefix = '') {
     const walk = function* (dir, rel) {
       let entries;
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }   // unreadable or gone: nothing to list there
       for (const e of entries) {
         const sub = rel ? `${rel}/${e.name}` : e.name;
         const full = path.join(dir, e.name);
@@ -114,7 +114,14 @@ class LocalStorage {
       }
     };
     const start = prefix.replace(/\/+$/, '');
-    yield* walk(start ? this._abs(start) : this.root, start);
+    // The walk and its stats are synchronous, so hand the event loop back
+    // every few hundred files: on a big or slow disk the startup index build
+    // and the daily check would otherwise stall the whole server.
+    let n = 0;
+    for (const item of walk(start ? this._abs(start) : this.root, start)) {
+      if (++n % 200 === 0) await new Promise(resolve => setImmediate(resolve));
+      yield item;
+    }
   }
 
   async ping() {

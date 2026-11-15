@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const path = require('node:path');
 const { utcStamp, isInt, isValidUploadPath, VALID_ROLE_PERMS, normalizeWordGroups, validEscalation } = require('./helpers');
 const { NEVER_SENT_SETTINGS, ADMIN_ONLY_SETTINGS, createSettingEffects } = require('./settingEffects');
+const { normalizeBlockedExtensions } = require('../uploadBlocklist');
 const {
   BUILTIN_THEMES,
   compatibleThemeFiles,
@@ -34,6 +35,12 @@ module.exports = function register(socket, ctx) {
   // so an admin who set SERVER_NAME in their compose file opened Settings,
   // saw an empty box, and had no way to tell whether it had taken effect or
   // what would happen if they typed in it. (#5489)
+  // Whether the GIF picker has a provider behind it: a key saved here or one
+  // in the environment.
+  const GIF_KEYS = ['giphy_api_key', 'klipy_api_key', 'tenor_api_key'];
+  const gifSearchAvailable = (rows) => rows.some(r => GIF_KEYS.includes(r.key) && !!r.value)
+    || !!(process.env.GIPHY_API_KEY || process.env.KLIPY_API_KEY || process.env.TENOR_API_KEY);
+
   const ENV_BACKED_SETTINGS = [
     { key: 'server_name',   env: 'SERVER_NAME' },
     { key: 'stun_urls',     env: 'STUN_URLS' },
@@ -103,9 +110,7 @@ module.exports = function register(socket, ctx) {
     // Whether the GIF picker has a provider behind it, said without the key
     // itself, so a non-admin client can hide the button when there is none
     // (#5654). Read from the rows, since the keys are stripped above.
-    const gifKeys = ['giphy_api_key', 'klipy_api_key', 'tenor_api_key'];
-    settings.gif_search_available = String(rows.some(r => gifKeys.includes(r.key) && !!r.value)
-      || !!(process.env.GIPHY_API_KEY || process.env.KLIPY_API_KEY || process.env.TENOR_API_KEY));
+    settings.gif_search_available = String(gifSearchAvailable(rows));
 
     socket.emit('server-settings', settings, envInfo);
   });
@@ -129,8 +134,11 @@ module.exports = function register(socket, ctx) {
       'deleted_retention_days', // how long files from deleted messages and channels are kept before they are removed for good
       'keep_self_destructed_attachments', // off removes a self destructed message's files for good instead of holding them
       'giphy_api_key', 'klipy_api_key', 'tenor_api_key', 'preferred_gif_search', 'server_name', 'server_title', 'server_icon', 'server_banner',
+      'banner_default_height', 'banner_default_offset', // what members see until they set their own
       'tunnel_enabled', 'tunnel_provider', 'server_code', 'max_upload_mb', 'max_attachments', 'max_poll_options', 'channel_templates',
       'max_tags_per_attachment', 'max_tag_len', // (#tagging phase 4) upload-tag limits
+      'blocked_upload_extensions', // (#5833) file types members cannot upload
+      'automod_ai_enabled', // experimental AutoMod Quarantine AI link checks
       'max_sound_kb', 'max_avatar_mb', 'max_emoji_kb', 'max_sticker_kb', 'setup_wizard_complete', 'update_banner_admin_only', 'update_channel_early', 'hide_disabled_channel_badges',
       'category_layout', 'category_short_names', // (#5756) category tabs and short names
       'media_group_layout', // (#5799) pictures sent together: 'grid' or 'stacked'
@@ -210,6 +218,10 @@ module.exports = function register(socket, ctx) {
     if (key === 'automod_words') {
       value = normalizeWordGroups(value);
       if (value === null) return;
+    }
+    if (key === 'blocked_upload_extensions') {
+      value = normalizeBlockedExtensions(value);
+      if (value === null) return socket.emit('error-msg', 'Blocked file types: list types like exe, bat, dll (letters and digits, up to 100).');
     }
     // Thresholds must be coherent or the escalation ladder misbehaves in
     // ways that are very hard to debug from the outside: a ban threshold
@@ -415,6 +427,8 @@ module.exports = function register(socket, ctx) {
     }
     if (key === 'server_code') return; // managed via generate/rotate events
     if (key === 'server_banner') { if (value && !isValidUploadPath(value)) return; }
+    if (key === 'banner_default_height') { const n = parseInt(value, 10); if (String(n) !== value || n < 80 || n > 400) return; }
+    if (key === 'banner_default_offset') { const n = parseInt(value, 10); if (String(n) !== value || n < 0 || n > 100) return; }
     if (key === 'vanity_code') {
       if (value && (value.length < 3 || value.length > 32 || !/^[a-zA-Z0-9_-]+$/.test(value))) return;
       if (value) {
@@ -429,6 +443,9 @@ module.exports = function register(socket, ctx) {
       if (!['true', 'false'].includes(value)) return;
     }
     if (key === 'invites_bypass_registration_token') {
+      if (!['true', 'false'].includes(value)) return;
+    }
+    if (key === 'automod_ai_enabled') {
       if (!['true', 'false'].includes(value)) return;
     }
     if (key === 'guests_enabled' || key === 'guests_allow_voice') {
@@ -509,6 +526,12 @@ module.exports = function register(socket, ctx) {
     }
 
     afterSettingSaved(key, value);
+    // A key saved or removed shows or hides everyone's GIF button straight
+    // away, not at their next reload.
+    if (GIF_KEYS.includes(key)) {
+      const gifRows = db.prepare(`SELECT key, value FROM server_settings WHERE key IN (${GIF_KEYS.map(() => '?').join(',')})`).all(...GIF_KEYS);
+      io.except('bot-sockets').emit('server-setting-changed', { key: 'gif_search_available', value: String(gifSearchAvailable(gifRows)) });
+    }
 
     if (previousValue !== value) auditSettingChange(socket.user, key, value, previousValue);
 

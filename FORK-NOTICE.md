@@ -319,6 +319,11 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   Files: `src/bazaarDiscordRefs.js`, `public/js/modules/app-bazaar-discord-refs.js`,
   `app-message-content.js`, `app-threads.js`, `app-forum.js`, `public/js/app.js`.
   Test: `test/bazaarDiscordRefs.test.js`.
+**2026-11-15, based on Haven v4.29.0** (4.28.0 and 4.29.0 merged in; everything above carries
+over. Fork columns `bazaar_staff_topics` and `bazaar_role_exclude` moved with the channel list
+into upstream's new `src/socketHandlers/channelList.js`; Ferry keeps the fork's edit, delete and
+pin sync next to upstream's new reaction sync.)
+
 - **Stream volume above 100% is really louder.** Upstream plays screen-share audio through a
   plain `<audio>` element by default (Web Audio drifted from the video over a TURN relay,
   #5426), and an element stops at 100%, so the 200% slider did nothing past halfway. A stream
