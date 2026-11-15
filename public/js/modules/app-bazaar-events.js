@@ -160,7 +160,7 @@ _bazaarEventShow(id) {
   overlay.style.display = 'flex';
 },
 
-_bazaarEventDo(ev, act, box) {
+async _bazaarEventDo(ev, act, box) {
   const done = (r) => { if (r && r.error) this._showToast(r.error, 'error'); };
   if (act === 'close') return this._bazaarEventClose();
   if (act === 'interest') return this.socket.emit('bazaar-event-interest', { id: ev.id, on: !ev.me }, done);
@@ -175,9 +175,10 @@ _bazaarEventDo(ev, act, box) {
       out.style.display = '';
     });
   }
-  if (act === 'cancel' && !confirm(T('cancel_confirm', { name: ev.name }))) return;
-  if (act === 'skip' && !confirm(T('skip_confirm'))) return;
-  if (act === 'end' && !confirm(T('end_confirm'))) return;
+  // Haven's own themed dialogs, not the browser's (upstream 4.29 test/themedDialogs.test.js).
+  if (act === 'cancel' && !await this._confirm(T('cancel_confirm', { name: ev.name }), { danger: true })) return;
+  if (act === 'skip' && !await this._confirm(T('skip_confirm'))) return;
+  if (act === 'end' && !await this._confirm(T('end_confirm'))) return;
   this.socket.emit('bazaar-event-action', { id: ev.id, action: act }, done);
 },
 
