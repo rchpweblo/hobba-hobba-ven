@@ -298,3 +298,16 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   `public/js/app.js`, `public/js/modules/app-bazaar-discord-refs.js`, `app-utilities.js`,
   `app-channel-unread.js` and `app-bazaar-role-bot.js`. Tests:
   `test/bazaarFerryPings.test.js`; `test/ferry.test.js` now expects the code kept.
+- **Pictures from Discord show once.** Three changes:
+  - A person's link that Discord unfurls as a "rich" embed (FxTwitter-style sites such as
+    fixupx.com and vxtwitter.com do) is no longer copied in as text and pictures when Haven
+    previews the link itself. Upstream read every rich embed as part of the message, which is
+    right for a bot's embed but showed a person's tweet two or three times.
+  - Haven previews a fixupx/vxtwitter/fxtwitter post link as the x.com post (the full X card),
+    under the same allowlist rule as x.com.
+  - Discord sends an update with no edit in it when it finishes unfurling a link. Ferry now
+    ignores it for its copies. Rebuilding from it marked the message edited and put a pasted
+    Discord file link back above the Haven copy that had replaced it. On a real edit, a
+    copied Discord file link stays out.
+  Files: `src/bazaarTwitterMirrors.js` (new), `src/ferry.js`, `src/routes/link-preview.js`.
+  Tests: `test/bazaarTwitterMirrors.test.js`, `test/bazaarFerrySync.test.js`.

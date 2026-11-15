@@ -163,7 +163,7 @@ test('edits and deletes cross both ways', async (t) => {
     const MID = discord.newId();
     const id = imported(MID, 'old words\n/uploads/pic.png');
     discord.dispatch('MESSAGE_UPDATE', discordMessage(MID, TEXT_ID, 'new words',
-      { attachments: [{ id: '1', url: 'https://cdn.discordapp.com/attachments/1/2/pic.png', filename: 'pic.png' }] }));
+      { edited_timestamp: new Date().toISOString(), attachments: [{ id: '1', url: 'https://cdn.discordapp.com/attachments/1/2/pic.png', filename: 'pic.png' }] }));
     const row = await until(() => db.prepare("SELECT content, edited_at FROM messages WHERE id = ? AND content LIKE 'new words%'").get(id));
     assert.ok(row, 'edited');
     assert.strictEqual(row.content, 'new words\n/uploads/pic.png');
@@ -265,11 +265,69 @@ test('edits and deletes cross both ways', async (t) => {
 
     // A later Discord edit changes the words and keeps the copy.
     discord.dispatch('MESSAGE_UPDATE', discordMessage(MID, TEXT_ID, 'look at this cat', {
+      edited_timestamp: new Date().toISOString(),
       attachments: [{ id: '11', filename: 'cat.png', url: 'https://cdn.discordapp.com/attachments/1/2/cat.png?ex=9' }],
     }));
     const edited = await until(() => db.prepare("SELECT content FROM messages WHERE id = ? AND content LIKE 'look at this cat%'").get(row.id));
     assert.ok(edited, 'edited');
     assert.ok(edited.content.includes(lines[1]), 'the copy is kept');
+  });
+
+  await t.test('a pasted Discord file link is copied once, and stays copied', async () => {
+    // As on the Bazaar's server: auto-mod off, so typed links come through
+    // and Haven previews any host.
+    A.emit('update-server-setting', { key: 'automod_enabled', value: 'false' });
+    await wait(300);
+    const MID = discord.newId();
+    const link = 'https://cdn.discordapp.com/attachments/7/8/dance.gif?ex=1&is=2&hm=3&';
+    discord.dispatch('MESSAGE_CREATE', discordMessage(MID, TEXT_ID, link));
+    const row = await until(() => db.prepare("SELECT id, content FROM messages WHERE discord_message_id = ? AND content LIKE '/uploads/%'").get(MID), 10000);
+    assert.ok(row, 'the link became its Haven copy');
+    assert.match(row.content, /^\/uploads\/\d+-[0-9a-f]{16}\.gif$/);
+
+    // Discord unfurls the link a moment later: an update with no edit in it.
+    discord.dispatch('MESSAGE_UPDATE', discordMessage(MID, TEXT_ID, link.replace('ex=1', 'ex=5'), {
+      edited_timestamp: null,
+      embeds: [{ type: 'gifv', url: link, thumbnail: { url: link } }],
+    }));
+    await wait(800);
+    const after = db.prepare('SELECT content, edited_at FROM messages WHERE id = ?').get(row.id);
+    assert.strictEqual(after.content, row.content, 'the link does not come back over the copy');
+    assert.strictEqual(after.edited_at, null, 'not marked edited');
+
+    // A real edit changes the words; the copied link still does not come back.
+    discord.dispatch('MESSAGE_UPDATE', discordMessage(MID, TEXT_ID, `so good ${link.replace('ex=1', 'ex=7')}`, {
+      edited_timestamp: new Date().toISOString(),
+    }));
+    const edited = await until(() => db.prepare("SELECT content FROM messages WHERE id = ? AND content LIKE 'so good%'").get(row.id));
+    assert.ok(edited, 'edited');
+    assert.strictEqual(edited.content, 'so good\n' + row.content);
+  });
+
+  await t.test("a fixupx link is not copied in twice: Haven previews it as the x.com post", async () => {
+    const MID = discord.newId();
+    const typed = 'https://fixupx.com/someone/status/2121603854118576500';
+    discord.dispatch('MESSAGE_CREATE', discordMessage(MID, TEXT_ID, typed, {
+      embeds: [{
+        type: 'rich', url: 'https://x.com/someone/status/2121603854118576500',
+        description: 'tweet words', image: { url: 'https://pbs.twimg.com/media/abc.jpg?name=orig' },
+      }],
+    }));
+    const row = await until(() => db.prepare('SELECT content FROM messages WHERE discord_message_id = ?').get(MID));
+    assert.ok(row, 'relayed');
+    assert.strictEqual(row.content, typed, 'just the link, which Haven unfurls itself');
+
+    // A bot's rich embed is still the message.
+    const BID = discord.newId();
+    discord.dispatch('MESSAGE_CREATE', discordMessage(BID, TEXT_ID, 'New post', {
+      author: { id: '999', username: 'newsbot', bot: true },
+      embeds: [{ type: 'rich', url: 'https://x.com/someone/status/1', description: 'news words', image: { url: 'https://pbs.twimg.com/media/b.jpg' } }],
+    }));
+    await wait(800);
+    const bot = db.prepare('SELECT content FROM messages WHERE discord_message_id = ?').get(BID);
+    if (bot) assert.ok(bot.content.includes('https://pbs.twimg.com/media/b.jpg'), bot.content);
+    A.emit('update-server-setting', { key: 'automod_enabled', value: 'true' });
+    await wait(300);
   });
 
   await t.test("Discord's stickers come into Haven, and go back out", async () => {

@@ -176,7 +176,8 @@ module.exports = function registerLinkPreview(deps) {
     const user = token ? verifyToken(token) : null;
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-    const url = (req.query.url || '').trim();
+    // Bizarre Bazaar fork: a fixupx/vxtwitter link previews as the x.com post.
+    const url = require('../bazaarTwitterMirrors').toX((req.query.url || '').trim());
     if (!url) return res.status(400).json({ error: 'Missing url param' });
 
     // Cache check FIRST: cache hits should never consume a rate-limit slot.

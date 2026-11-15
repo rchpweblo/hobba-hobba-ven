@@ -48,6 +48,7 @@ const bazaarFerrySync = require('./bazaarFerrySync');
 const importFiles = require('./importFiles');
 const bazaarStickers = require('./bazaarStickers');
 const bazaarFerryPings = require('./bazaarFerryPings');
+const bazaarTwitterMirrors = require('./bazaarTwitterMirrors');
 
 /**
  * The tests run Ferry against a stand-in Discord on this machine, set through
@@ -1316,7 +1317,12 @@ function buildHavenContent(msg) {
   // the preview allowlist at render time, which is the control that exists to
   // stop a third-party host seeing everyone who scrolls past.
   const allEmbeds = (msg.embeds || []).filter(Boolean).slice(0, 10);
-  const richEmbeds = allEmbeds.filter(e => e.type === 'rich');
+  // Bizarre Bazaar fork: a person cannot send a rich embed, so one on their
+  // message is an unfurl too (FxTwitter-style sites unfurl as 'rich'). When
+  // Haven previews a link they typed itself, copying the unfurl in as well
+  // showed the same post and pictures twice.
+  const havenPreviews = !!(msg.author && !msg.author.bot && !msg.webhook_id) && bazaarHavenPreviews(text);
+  const richEmbeds = havenPreviews ? [] : allEmbeds.filter(e => e.type === 'rich');
   const embeds = richEmbeds.length ? richEmbeds
     : (!authored.length && !media.length ? allEmbeds : []);
   if (embeds.length) {
@@ -1384,6 +1390,15 @@ function buildHavenContent(msg) {
   // A picture referenced from both a component and an attachment goes once.
   const uniqueMedia = [...new Set(media.filter(Boolean))];
   return cleanOf([...authored, ...uniqueMedia].join('\n').slice(0, 4000));
+}
+
+// Bizarre Bazaar fork: whether Haven makes its own preview for a link in the
+// typed text (the link allowlist, with fixupx and friends read as x.com).
+function bazaarHavenPreviews(text) {
+  const links = String(text || '').match(/https?:\/\/[^\s<>()[\]"']+/gi) || [];
+  return links.some((link) => {
+    try { return automod.previewAllowed(bazaarTwitterMirrors.toX(link)); } catch { return false; }
+  });
 }
 
 function discordHttpUrl(obj) {
@@ -2231,6 +2246,10 @@ function bazaarEditFromDiscord(msg) {
   if (msg.author && msg.author.bot && !boolSetting('ferry_relay_bots', false)) return;
   // Only Haven copies of Discord messages (no Haven author) change, and a
   // protected one stays as it is.
+  // Discord also sends an update when it finishes unfurling a link, or when a
+  // pin or flag changes. Nothing was edited then; rebuilding from it marked
+  // the message edited and brought back a Discord file link already copied.
+  if (!msg.edited_timestamp) return;
   const rows = bazaarFerrySync.havenCopies(deps.db, msg.id).filter(r => r.user_id == null && !r.is_archived);
   if (!rows.length) return;
   const fresh = buildHavenContent(msg);
@@ -2239,7 +2258,7 @@ function bazaarEditFromDiscord(msg) {
   const words = buildHavenContent({ ...msg, attachments: [], components: [], sticker_items: [] });
   for (const row of rows) {
     const kept = String(row.content || '').split('\n').filter(line => line.includes('/uploads/'));
-    const content = kept.length ? [words, ...kept].filter(Boolean).join('\n') : fresh;
+    const content = kept.length ? [bazaarDropCopiedLinks(words, row.content), ...kept].filter(Boolean).join('\n') : fresh;
     if (!content || content === row.content) continue;
     try {
       const done = deps.db.prepare('UPDATE messages SET content = ?, edited_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id IS NULL AND is_archived = 0').run(content, row.id);
@@ -2249,6 +2268,23 @@ function bazaarEditFromDiscord(msg) {
       console.error('Ferry could not apply a Discord edit:', err.message);
     }
   }
+}
+
+// A Discord file link someone typed was swapped for its Haven copy when it
+// came in; the copy is kept separately, so the link (Discord re-signs it on
+// every edit, hence matching on the path) does not come back. One whose copy
+// failed is still in the old text and stays.
+function bazaarDropCopiedLinks(words, oldContent) {
+  const old = String(oldContent || '');
+  let dropped = false;
+  const out = String(words || '').replace(importFiles.DISCORD_FILE_LINK, (link) => {
+    let path = '';
+    try { path = new URL(link).pathname; } catch { return link; }
+    if (old.includes(path)) return link;
+    dropped = true;
+    return '';
+  });
+  return dropped ? out.split('\n').map(l => l.trim()).filter(Boolean).join('\n') : words;
 }
 
 function bazaarDeleteFromDiscord(discordIds) {
