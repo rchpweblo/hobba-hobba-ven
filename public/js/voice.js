@@ -4083,8 +4083,12 @@ class VoiceManager {
     // native playout (createMediaStreamSource yields silence there).
     let _useWebAudioScreen = false;
     try { _useWebAudioScreen = localStorage.getItem('screen_audio_webaudio') === '1'; } catch { /* storage blocked (private mode): keep the default */ }
-    if (_IS_IOS_WEBKIT || !_useWebAudioScreen) {
-      const savedVolume = Math.min(1, this._getSavedStreamVolume(userId));
+    // Bizarre Bazaar fork: a stream turned up past 100% goes through the mixer
+    // while it is (an <audio> element stops at 100%), and back to native
+    // playout below that, so the 200% slider does what it shows.
+    const _bzBoosted = this._bazaarStreamVolume(userId) > 1;
+    if (_IS_IOS_WEBKIT || (!_useWebAudioScreen && !_bzBoosted)) {
+      const savedVolume = Math.min(1, this._bazaarStreamVolume(userId));
       if (this.isDeafened) {
         audioEl.dataset.prevVolume = String(savedVolume);
         audioEl.volume = 0;
@@ -4103,13 +4107,13 @@ class VoiceManager {
       this._ensureAudioCtx();
       const source = this.audioCtx.createMediaStreamSource(stream);
       const gainNode = this.audioCtx.createGain();
-      gainNode.gain.value = this._getAppliedIncomingVolume(this._getSavedStreamVolume(userId));
+      gainNode.gain.value = this._getAppliedIncomingVolume(Math.min(2, this._bazaarStreamVolume(userId)));
       source.connect(gainNode);
       gainNode.connect(this.audioCtx.destination);
       this.screenGainNodes.set(userId, gainNode);
       audioEl.volume = 0;
     } catch {
-      const savedVolume = Math.min(1, this._getSavedStreamVolume(userId));
+      const savedVolume = Math.min(1, this._bazaarStreamVolume(userId));
       if (this.isDeafened) {
         audioEl.dataset.prevVolume = String(savedVolume);
         audioEl.volume = 0;
@@ -4160,6 +4164,20 @@ class VoiceManager {
     const clampedGain = Math.max(0, Math.min(2, volume));
     const clampedVol  = Math.max(0, Math.min(1, volume));
     const audioEl = document.getElementById(`voice-audio-screen-${userId}`);
+    // Bizarre Bazaar fork: crossing 100% switches this stream between native
+    // playout and the mixer (_playScreenAudio), keyed as the element is.
+    if (!this._bzStreamVolumes) this._bzStreamVolumes = new Map();
+    this._bzStreamVolumes.set(String(userId), volume);
+    if (audioEl && audioEl.srcObject && !_IS_IOS_WEBKIT) {
+      let optedIn = false;
+      try { optedIn = localStorage.getItem('screen_audio_webaudio') === '1'; } catch { /* storage blocked: not opted in */ }
+      const wantMixer = optedIn || clampedGain > 1;
+      if (wantMixer !== !!gainNode) {
+        const raw = audioEl.id.replace('voice-audio-screen-', '');
+        this._playScreenAudio(/^\d+$/.test(raw) ? parseInt(raw, 10) : raw, audioEl.srcObject);
+        return;
+      }
+    }
     if (gainNode) {
       // The Web Audio graph is the active output for this stream. Drive volume
       // through the gain node and keep the <audio> element muted. If we let the
@@ -4174,6 +4192,13 @@ class VoiceManager {
       // the output, so volume rides on the element.
       audioEl.volume = clampedVol;
     }
+  }
+
+  // Bizarre Bazaar fork: the volume just set on the slider (saved after this
+  // runs), else the saved one.
+  _bazaarStreamVolume(userId) {
+    const now = this._bzStreamVolumes && this._bzStreamVolumes.get(String(userId));
+    return typeof now === 'number' && Number.isFinite(now) ? now : this._getSavedStreamVolume(userId);
   }
 
   _getSavedStreamVolume(userId) {

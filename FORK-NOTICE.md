@@ -319,3 +319,10 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
   Files: `src/bazaarDiscordRefs.js`, `public/js/modules/app-bazaar-discord-refs.js`,
   `app-message-content.js`, `app-threads.js`, `app-forum.js`, `public/js/app.js`.
   Test: `test/bazaarDiscordRefs.test.js`.
+- **Stream volume above 100% is really louder.** Upstream plays screen-share audio through a
+  plain `<audio>` element by default (Web Audio drifted from the video over a TURN relay,
+  #5426), and an element stops at 100%, so the 200% slider did nothing past halfway. A stream
+  turned up past 100% now goes through a Web Audio gain node while it is, and back to native
+  playout at 100% or under. The Debug opt-in still keeps every stream on the mixer.
+  Files: `public/js/voice.js` (`_playScreenAudio`, `setStreamVolume`), `public/app.html`.
+  Test: `test/bazaarStreamBoost.test.js`.
