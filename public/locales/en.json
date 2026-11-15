@@ -5140,6 +5140,21 @@
     "result_toast": "The Role Bot gave you {{count}} role(s)",
     "result_none": "Discord linked. The Role Bot found no new roles to give you"
   },
+  "bazaar_save": {
+    "title": "Save as",
+    "original": "Original",
+    "original_ext": "Original ({{ext}})",
+    "png_still": "PNG (still picture)",
+    "webp_animated": "WebP (animated)",
+    "converting": "Converting to {{fmt}}…",
+    "converting_video": "Converting to {{fmt}}… a long video can take a few minutes",
+    "cannot_convert": "This picture can't be converted here. Save the original instead",
+    "save_video": "Save video",
+    "video": "Video",
+    "saved": "Video saved",
+    "cancelled": "Save cancelled",
+    "save_failed": "Couldn't save the video: {{error}}"
+  },
   "bazaar_events": {
     "section": "Events",
     "none_yet": "No upcoming events",

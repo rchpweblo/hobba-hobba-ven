@@ -25,7 +25,7 @@ import AdminReauthMethods from './modules/app-admin-reauth.js?v=4.23.8';
 import ExtensionUpdateMethods from './modules/app-extension-updates.js?v=4.17.18';
 import ServerBarMethods from './modules/app-server-bar.js?v=4.29.55';
 import MobileMethods from './modules/app-mobile.js?v=4.29.50';
-import MediaMethods    from './modules/app-media.js?v=4.27.57';
+import MediaMethods    from './modules/app-media.js?v=4.27.57-bazaar-1';
 import ImageZoomMethods from './modules/app-image-zoom.js?v=4.25.20';
 import MediaGridMethods from './modules/app-media-grid.js?v=4.27.31';
 import FeedAnchorMethods from './modules/app-feed-anchor.js?v=4.25.26';
@@ -60,7 +60,7 @@ import MusicMethods from './modules/app-music.js?v=4.27.17';
 import MusicFileMethods from './modules/app-music-file.js?v=4.27.49';
 import MusicKeyMethods from './modules/app-music-keys.js?v=4.24.19';
 import UtilityMethods  from './modules/app-utilities.js?v=4.29.12-bazaar-1';
-import MessageContentMethods from './modules/app-message-content.js?v=4.29.55-bazaar-1';
+import MessageContentMethods from './modules/app-message-content.js?v=4.29.55-bazaar-2';
 import EmojiPickerMethods from './modules/app-emoji-picker.js?v=4.29.50';
 import GifPickerMethods from './modules/app-gif-picker.js?v=4.29.20';
 import ThreadMethods from './modules/app-threads.js?v=4.29.50-bazaar-1';
@@ -79,6 +79,7 @@ import FerryMethods    from './modules/app-ferry.js?v=4.27.52';
 import ForumMethods    from './modules/app-forum.js?v=4.29.55-bazaar-1';
 import BazaarRoleBotMethods from './modules/app-bazaar-role-bot.js?v=bazaar-3'; // Bizarre Bazaar fork
 import BazaarEventMethods from './modules/app-bazaar-events.js?v=bazaar-2'; // Bizarre Bazaar fork
+import BazaarSaveFormatMethods from './modules/app-bazaar-save-formats.js?v=bazaar-1'; // Bizarre Bazaar fork
 import BazaarDiscordRefMethods from './modules/app-bazaar-discord-refs.js?v=bazaar-3'; // Bizarre Bazaar fork
 import BazaarVoiceBubbleMethods from './modules/app-bazaar-voice-bubble.js?v=bazaar-3'; // Bizarre Bazaar fork
 import BazaarThreadPageMethods from './modules/app-bazaar-thread-pages.js?v=bazaar-3'; // Bizarre Bazaar fork
@@ -673,6 +674,7 @@ Object.assign(HavenApp.prototype,
   PlatformMethods,
   BazaarRoleBotMethods,
   BazaarEventMethods,
+  BazaarSaveFormatMethods,
   BazaarDiscordRefMethods,
   BazaarVoiceBubbleMethods,
   BazaarThreadPageMethods,

@@ -500,7 +500,7 @@ _revealHeldUpload(ph, src, kind) {
     video.className = 'file-video';
     wrap.appendChild(video);
     ph.replaceWith(wrap);
-    holder?.querySelector('.file-info')?.insertAdjacentHTML('beforeend', this._mediaControlsHtml?.('video') || '');
+    holder?.querySelector('.file-info')?.insertAdjacentHTML('beforeend', this._mediaControlsHtml?.('video', this._bazaarVideoSaveHtml?.() || '') || '');
     if (holder) this._setupVideos(holder);
     return;
   }
@@ -649,9 +649,10 @@ async _blobForContextImage(src, sourceImg) {
   }
 },
 
-async _saveContextImage(src, sourceImg) {
+async _saveContextImage(src, sourceImg, fmt = null) {
   try {
-    const blob = await this._blobForContextImage(src, sourceImg);
+    // fmt (Bizarre Bazaar fork): 'png' or 'webp' to save a converted copy.
+    const blob = fmt ? await this._bazaarConvertImage(src, sourceImg, fmt) : await this._blobForContextImage(src, sourceImg);
     const filename = this._suggestedImageFilename(src, blob);
     if (typeof window.havenDesktop?.saveImage === 'function') {
       const buf = await blob.arrayBuffer();
@@ -794,6 +795,15 @@ _showImageContextMenu(e, src, opts = {}) {
   menu.addEventListener('click', async (ev) => {
     const action = ev.target.dataset.action;
     if (action === 'save') {
+      // Bizarre Bazaar fork: Save opens a format menu beside it (app-bazaar-save-formats.js).
+      const choices = this._bazaarImageSaveChoices?.(src, sourceImg);
+      if (choices && choices.length > 1) {
+        this._bazaarSaveFormatMenu(ev.target.closest('button'), choices, (fmt) => {
+          this._hideImageContextMenu();
+          this._saveContextImage(src, sourceImg, fmt);
+        });
+        return;
+      }
       this._hideImageContextMenu();
       this._saveContextImage(src, sourceImg);
       return;

@@ -212,7 +212,7 @@ _formatContent(str, opts) {
       </div>`;
       }
       return `<div class="file-attachment">
-        <div class="file-info"><span class="file-type-icon" aria-hidden="true">${icon}</span> <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span>${this._mediaControlsHtml?.('video') || ''}</div>
+        <div class="file-info"><span class="file-type-icon" aria-hidden="true">${icon}</span> <span class="file-name">${fileName}</span> <span class="file-size">(${fileSize})</span>${this._mediaControlsHtml?.('video', this._bazaarVideoSaveHtml?.() || '') || ''}</div>
         <div class="file-video-wrap">
           <video controls preload="none" src="${fileUrl}" class="file-video"></video>
         </div>

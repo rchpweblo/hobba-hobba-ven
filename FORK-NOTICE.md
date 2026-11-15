@@ -331,3 +331,16 @@ pin sync next to upstream's new reaction sync.)
   playout at 100% or under. The Debug opt-in still keeps every stream on the mixer.
   Files: `public/js/voice.js` (`_playScreenAudio`, `setStreamVolume`), `public/app.html`.
   Test: `test/bazaarStreamBoost.test.js`.
+- **Save pictures and videos in another format.** Save on the picture menu opens a small menu
+  beside it: Original (JPG), PNG, WebP (an animated GIF stays animated as WebP). Videos get a
+  save button in their control row with Original (MOV), MP4, WebM. Still pictures are redrawn
+  in the browser (works for encrypted DM pictures too); GIFs and videos are converted by the
+  server's ffmpeg on request and streamed straight to the person saving, with nothing written
+  to disk or kept: stored uploads are never converted. A video already in a codec the new
+  container takes (a phone's H.264 .mov to MP4) is copied, not re-encoded. Two conversions at
+  a time server-wide, one per person, at low priority. WebP originals offer PNG only, since
+  ffmpeg 4.4 cannot read animated WebP.
+  Files: `src/bazaarMediaConvert.js` (`GET /api/bazaar-convert`), `server.js`,
+  `public/js/modules/app-bazaar-save-formats.js`, `app-media.js` (Save entry, `_saveContextImage`),
+  `app-message-content.js` (video controls), `public/js/app.js`, `public/locales/en.json`.
+  Test: `test/bazaarMediaConvert.test.js`.

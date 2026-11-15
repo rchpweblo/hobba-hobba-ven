@@ -1566,6 +1566,7 @@ app.post('/api/upload-server-banner', uploadLimiter, uploadDiskGuard, (req, res)
 
 // Bizarre Bazaar fork: cover images for scheduled events.
 require('./src/bazaarEventImageRoute').registerBazaarEventImageRoute(app, { upload, uploadLimiter, uploadDiskGuard, storage, verifyToken, getDb: () => require('./src/database').getDb() });
+require('./src/bazaarMediaConvert').registerBazaarMediaConvertRoute(app, { storage, verifyToken }); // Bizarre Bazaar fork: save in another format
 
 // ── GIF endpoint rate limiting (per IP) ──────────────────
 const gifLimitStore = new Map();
