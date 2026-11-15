@@ -55,12 +55,46 @@ _bazaarDiscordRefsText(text) {
     if (kind === '#') {
       const c = refs.channels[id];
       const ch = c && c.channelId ? (this.channels || []).find(x => x && x.id === c.channelId) : null;
+      if (c && c.threadId) return '#' + (ch ? (c.name || ch.name) : t('bazaar_discord_refs.no_access'));
       return ch ? '#' + ch.name : (c && c.name ? '#' + c.name : full);
     }
     const u = refs.users[id];
     const nick = u && u.userId && this._nicknames ? this._nicknames[u.userId] : null;
     return nick || (u && u.name) ? '@' + (nick || u.name) : full;
   });
+},
+
+// Clicks on thread links, wired once (anywhere messages show: channel,
+// thread panel, pins, search). The thread's channel opens first if needed.
+_bazaarWireThreadLinks() {
+  if (this._bazaarThreadLinksWired) return;
+  this._bazaarThreadLinksWired = true;
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest?.('.bz-thread-link[data-bz-thread-id]');
+    if (!link) return;
+    e.preventDefault();
+    e.stopPropagation();
+    this._bazaarOpenThreadLink(link.dataset.bzThreadCode, Number(link.dataset.bzThreadId));
+  });
+},
+
+_bazaarOpenThreadLink(code, rootId) {
+  if (!code || !rootId) return;
+  const ch = (this.channels || []).find(x => x && x.code === code);
+  const open = () => {
+    // A forum shows its topics as cards, so the topic opens straight away;
+    // in a chat channel the first message goes on screen first, as the
+    // Threads list does, because the thread's header is read from it.
+    if (ch && ch.is_forum) return this._openThread(rootId);
+    this._jumpToMessage(rootId, true);
+    setTimeout(() => this._openThread(rootId), 150);
+  };
+  if (code !== this.currentChannel) {
+    this.switchChannel(code);
+    setTimeout(open, 600);
+  } else {
+    open();
+  }
 },
 
 // The HTML for one code, or null to leave it as typed (names not loaded yet).
@@ -87,6 +121,13 @@ _bazaarDiscordRefHtml(kind, id) {
   const c = refs.channels[id];
   if (c && c.channelId) {
     const ch = (this.channels || []).find(x => x && x.id === c.channelId && !x.is_dm);
+    // A Discord thread copied as a Haven thread or forum topic opens it.
+    if (ch && c.threadId) {
+      this._bazaarWireThreadLinks();
+      const name = c.name || ch.name;
+      return `<span class="channel-link bz-thread-link" data-bz-thread-code="${this._escapeHtml(ch.code)}" data-bz-thread-id="${Number(c.threadId)}">#${this._escapeHtml(String(name).replace(/\s+/g, '_'))}</span>`;
+    }
+    if (c.threadId) return `<span class="muted-text"${tip}>#${this._escapeHtml(t('bazaar_discord_refs.no_access'))}</span>`;
     if (ch) return `<span class="channel-link" data-channel-code="${this._escapeHtml(ch.code)}">#${this._escapeHtml(String(ch.name).replace(/\s+/g, '_'))}</span>`;
     return `<span class="muted-text"${tip}>#${this._escapeHtml(t('bazaar_discord_refs.no_access'))}</span>`;
   }

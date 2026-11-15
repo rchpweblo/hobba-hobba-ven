@@ -873,7 +873,8 @@ _replyPreviewText(content) {
       try { name = JSON.parse(l.slice(9)).name || ''; } catch { /* unreadable marker: plain label */ }
       return `📎 ${name || t('messages.preview_file')}`;
     }
-    return l;
+    // Bizarre Bazaar fork: Discord's <@id> / <#id> codes read as names.
+    return this._bazaarDiscordRefsText?.(l) ?? l;
   }).filter(l => l !== null).join(' ');
 },
 

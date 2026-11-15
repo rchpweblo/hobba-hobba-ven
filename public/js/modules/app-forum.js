@@ -132,13 +132,19 @@ _forumTitleOf(msg) {
   const lead = this._forumLeadLinkOf(msg);
   const lp = lead ? this._forumLinkPreviewOf(lead) : null;
   if (lp && typeof lp.title === 'string' && lp.title.trim()) return lp.title.trim().slice(0, 120);
-  const lines = String(msg.content || '').split('\n').map(l => l.trim()).filter(l => l && !this._isImageUrl(l) && !/^(?:spoiler-img:)?\[file:/.test(l));
+  const lines = this._bazaarForumText(msg).split('\n').map(l => l.trim()).filter(l => l && !this._isImageUrl(l) && !/^(?:spoiler-img:)?\[file:/.test(l));
   const first = lines[0] || (this._isImageUrl(String(msg.content || '').trim()) ? t('forum.image_topic') : String(msg.content || ''));
   return first.replace(/^#+\s*/, '').replace(/^\*\*(.+)\*\*$/, '$1').slice(0, 120);
 },
 
+// Bizarre Bazaar fork: a post's text with Discord's <@id> / <#id> codes as names.
+_bazaarForumText(msg) {
+  const text = String(msg.content || '');
+  return this._bazaarDiscordRefsText?.(text) ?? text;
+},
+
 _forumSnippetOf(msg) {
-  const lines = String(msg.content || '').split('\n').map(l => l.trim()).filter(l => l && !this._isImageUrl(l) && !/^(?:spoiler-img:)?\[file:/.test(l));
+  const lines = this._bazaarForumText(msg).split('\n').map(l => l.trim()).filter(l => l && !this._isImageUrl(l) && !/^(?:spoiler-img:)?\[file:/.test(l));
   const body = msg.title ? lines.join(' ') : lines.slice(1).join(' ');
   return body.replace(/[*_`>#]/g, '').slice(0, 220);
 },

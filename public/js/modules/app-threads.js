@@ -93,7 +93,8 @@ _setThreadReply(msgEl, msgId) {
     || this._getNickname?.(parseInt(msgEl.dataset.userId, 10), msgEl.dataset.username)
     || msgEl.dataset.username || t('voice.someone');
   const rawContent = msgEl.dataset.rawContent || msgEl.querySelector('.thread-msg-content')?.textContent || '';
-  const preview = rawContent.length > 70 ? rawContent.substring(0, 70) + '…' : rawContent;
+  const shown = this._bazaarDiscordRefsText?.(rawContent) ?? rawContent; // Bizarre Bazaar fork: codes as names
+  const preview = shown.length > 70 ? shown.substring(0, 70) + '…' : shown;
   this._threadReplyingTo = { id: msgId, username: author, content: rawContent };
 
   const bar = document.getElementById('thread-reply-bar');

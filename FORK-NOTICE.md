@@ -311,3 +311,11 @@ in as they come out. Each deployed version is tagged `bazaar-<upstream version>-
     copied Discord file link stays out.
   Files: `src/bazaarTwitterMirrors.js` (new), `src/ferry.js`, `src/routes/link-preview.js`.
   Tests: `test/bazaarTwitterMirrors.test.js`, `test/bazaarFerrySync.test.js`.
+- **Discord codes read as names everywhere, and thread links open.** Reply lines, the thread
+  list, a thread's header, the thread reply bar and forum cards show Discord's `<@id>` /
+  `<#id>` as names, as messages already did. A `<#thread>` for a Discord thread that was
+  copied as a Haven thread or forum topic (Discord gives a thread its first message's id)
+  is now a link that opens it, shown only to people who can see its channel.
+  Files: `src/bazaarDiscordRefs.js`, `public/js/modules/app-bazaar-discord-refs.js`,
+  `app-message-content.js`, `app-threads.js`, `app-forum.js`, `public/js/app.js`.
+  Test: `test/bazaarDiscordRefs.test.js`.

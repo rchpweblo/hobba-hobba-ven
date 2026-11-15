@@ -85,6 +85,25 @@ function refsFor(db) {
   for (const c of db.prepare("SELECT id, discord_channel_id FROM channels WHERE is_dm = 0 AND discord_channel_id IS NOT NULL AND discord_channel_id != ''").all()) {
     channels[c.discord_channel_id] = { channelId: c.id };
   }
+  // A Discord thread copied as a Haven thread or forum topic: Discord gives a
+  // thread its first message's id, so <#thread> opens that thread. It goes
+  // out as Haven ids, and the client shows it only in a channel it can see.
+  const threadIds = new Set(Object.keys(channels).filter(id => !channels[id].channelId));
+  for (const table of [['ferry_forum_threads', 'discord_thread_id'], ['bazaar_ferry_chat_threads', 'discord_thread_id']]) {
+    try { for (const r of db.prepare(`SELECT ${table[1]} AS d FROM ${table[0]}`).all()) if (r.d && !channels[r.d]?.channelId) threadIds.add(String(r.d)); } catch { /* table not there yet */ }
+  }
+  const root = db.prepare(`SELECT m.id, m.channel_id, m.title FROM messages m JOIN channels c ON c.id = m.channel_id
+    WHERE m.discord_message_id = ? AND m.thread_id IS NULL AND c.is_dm = 0 ORDER BY m.id LIMIT 1`);
+  const forumTopic = (() => { try { return db.prepare('SELECT topic_message_id AS id FROM ferry_forum_threads WHERE discord_thread_id = ?'); } catch { return null; } })();
+  const chatRoot = (() => { try { return db.prepare('SELECT root_message_id AS id FROM bazaar_ferry_chat_threads WHERE discord_thread_id = ?'); } catch { return null; } })();
+  const byId = db.prepare('SELECT m.id, m.channel_id, m.title FROM messages m JOIN channels c ON c.id = m.channel_id WHERE m.id = ? AND m.thread_id IS NULL AND c.is_dm = 0');
+  for (const id of threadIds) {
+    const mapped = forumTopic?.get(id) || chatRoot?.get(id);
+    const r = (mapped && byId.get(mapped.id)) || root.get(id);
+    if (!r) continue;
+    const name = (channels[id] && channels[id].name) || r.title || null;
+    channels[id] = { channelId: r.channel_id, threadId: r.id, ...(name ? { name } : {}) };
+  }
   return { users, roles, channels };
 }
 

@@ -64,7 +64,7 @@ function fakeElement() {
 }
 function loadApp() {
   const sandbox = {
-    document: { documentElement: { lang: 'en-US' }, querySelectorAll: () => [], createElement: () => fakeElement() },
+    document: { documentElement: { lang: 'en-US' }, querySelectorAll: () => [], createElement: () => fakeElement(), addEventListener: () => {} },
     navigator: { languages: ['en-US'] },
     setInterval: () => 0, clearInterval: () => {},
     Intl, Date, Number, Math, JSON, String, Array, Object, RegExp, Error,
@@ -128,4 +128,37 @@ test('codes inside a code block stay as they are', () => {
   const app = loadApp();
   app._bazaarDiscordRefs = REFS;
   assert.doesNotMatch(app._formatContent('```\n<@' + D.stranger + '>\n```'), /@Stranger/);
+});
+
+test('a Discord thread copied into Haven: its first message opens it', () => {
+  const T = { chat: '700000000000000001', forum: '700000000000000002', gone: '700000000000000003' };
+  const ch = db.prepare("INSERT INTO channels (name, code) VALUES ('talk', 'talk0001')").run().lastInsertRowid;
+  const forum = db.prepare("INSERT INTO channels (name, code, is_forum) VALUES ('board', 'board001', 1)").run().lastInsertRowid;
+  const root = db.prepare('INSERT INTO messages (channel_id, content, discord_message_id) VALUES (?, ?, ?)').run(ch, 'start', T.chat).lastInsertRowid;
+  db.prepare('INSERT INTO messages (channel_id, content, thread_id, discord_message_id) VALUES (?, ?, ?, ?)').run(ch, 'reply', root, '700000000000000009');
+  const topic = db.prepare('INSERT INTO messages (channel_id, content, title) VALUES (?, ?, ?)').run(forum, 'body', 'Big Topic').lastInsertRowid;
+  db.prepare("INSERT INTO ferry_forum_threads (topic_message_id, channel_id, guild_id, discord_forum_id, discord_thread_id) VALUES (?, ?, '1', '2', ?)").run(topic, forum, T.forum);
+  refs.saveName(db, 'channel', T.chat, 'chat thread');
+  refs.saveName(db, 'channel', T.gone, 'deleted thread');
+
+  const r = refs.refsFor(db);
+  assert.deepEqual(r.channels[T.chat], { channelId: ch, threadId: root, name: 'chat thread' });
+  assert.deepEqual(r.channels[T.forum], { channelId: forum, threadId: topic, name: 'Big Topic' });
+  assert.deepEqual(r.channels[T.gone], { name: 'deleted thread' });
+
+  const app = loadApp();
+  app.channels = [{ id: ch, name: 'talk', code: 'talk0001', is_dm: 0 }];
+  app._bazaarDiscordRefs = r;
+  const html = app._formatContent(`see <#${T.chat}> and <#${T.forum}>`);
+  assert.match(html, new RegExp(`<span class="channel-link bz-thread-link" data-bz-thread-code="talk0001" data-bz-thread-id="${root}">#chat_thread</span>`));
+  assert.match(html, /#no_access/, 'a forum the viewer cannot see stays hidden');
+  assert.doesNotMatch(html, /Big/);
+  assert.equal(app._bazaarDiscordRefsText(`<#${T.chat}> <#${T.forum}>`), '#chat thread #no_access');
+});
+
+test('reply lines read the codes as names', () => {
+  const app = loadApp();
+  app._isImageUrl = () => false;
+  app._bazaarDiscordRefs = REFS;
+  assert.equal(app._replyPreviewText(`hey <@${D.stranger}>\nin <#${D.copied}>`), 'hey @Stranger in #quotes');
 });
