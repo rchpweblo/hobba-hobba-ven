@@ -16,6 +16,8 @@
 // Which Discord message a Haven message is comes from ferry_message_map
 // (src/ferryReplies.js), so only messages Ferry carried take part.
 
+const { IN_JSON, jsonList } = require('./bazaarSqlList'); // Bizarre Bazaar fork
+
 const SNOWFLAKE = /^\d{5,25}$/;
 const NAMED = /^:([a-zA-Z0-9_-]{1,30}):$/;
 const MAX_NAME = 80;
@@ -41,9 +43,9 @@ function ensureSchema(db) {
 
 function discordRows(db, messageIds) {
   if (!messageIds.length) return [];
-  const ph = messageIds.map(() => '?').join(',');
+  // Bizarre Bazaar fork: one JSON parameter, so a whole long topic fits.
   return db.prepare(`SELECT message_id, emoji, discord_user_id, name FROM ferry_reactions
-    WHERE message_id IN (${ph}) ORDER BY created_at, rowid`).all(...messageIds);
+    WHERE message_id ${IN_JSON} ORDER BY created_at, rowid`).all(jsonList(messageIds));
 }
 
 const asEntry = (r) => ({ emoji: r.emoji, user_id: `discord:${r.discord_user_id}`, username: r.name + MARK });

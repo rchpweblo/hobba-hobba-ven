@@ -11,6 +11,9 @@ const forumBlog = require('../forumBlog');
 const bazaarForum = require('../bazaarForum');
 // Bizarre Bazaar fork: how many thread replies come per page (get-thread-messages).
 const BAZAAR_THREAD_PAGE = 150;
+// Bizarre Bazaar fork: a client that cannot page (the Android app) gets the
+// newest this many replies of a topic, not all of them.
+const BAZAAR_UNPAGED_CAP = 1000;
 const highlights = require('../messageHighlights');
 const quotes = require('../messageQuotes');
 const ferryReactions = require('../ferryReactions');
@@ -26,6 +29,7 @@ const storage = require('../storage');
 const { groupHistoryFloor } = require('../groupHistory');
 const { isSafeUploadRelPath } = storage;
 const createReadPositions = require('../db/readPositions');
+const { IN_JSON, jsonList } = require('../bazaarSqlList');
 const { mentionsMeCondition } = require('../mentionFilter');
 
 // The length limit is on what people type. An encrypted DM reaches the
@@ -3192,13 +3196,27 @@ module.exports = function register(socket, ctx) {
       const newer = sideOf('newer', after, BAZAAR_THREAD_PAGE + 1);
       hasNewer = newer.length > BAZAAR_THREAD_PAGE;
       messages = newer.slice(0, BAZAAR_THREAD_PAGE);
-    } else if (!paged) {
+    } else if (!paged && blogParts) {
+      // A blog post's pictures are its first replies: the topic stays whole.
       messages = db.prepare(`
         SELECT ${threadCols}
         FROM messages m LEFT JOIN users u ON m.user_id = u.id
         WHERE m.thread_id = ?
         ORDER BY m.created_at ASC, m.id ASC
       `).all(parentId);
+    } else if (!paged) {
+      // Bizarre Bazaar fork: the newest BAZAAR_UNPAGED_CAP replies. A topic
+      // copied from Discord can hold 47,000; all of them at once is more
+      // than a phone can draw. Older ones are read in the browser or desktop app.
+      const newest = db.prepare(`
+        SELECT ${threadCols}
+        FROM messages m LEFT JOIN users u ON m.user_id = u.id
+        WHERE m.thread_id = ?
+        ORDER BY m.created_at DESC, m.id DESC
+        LIMIT ?
+      `).all(parentId, BAZAAR_UNPAGED_CAP + 1);
+      hasMore = newest.length > BAZAAR_UNPAGED_CAP;
+      messages = newest.slice(0, BAZAAR_UNPAGED_CAP).reverse();
     } else {
       const page = db.prepare(`
         SELECT ${threadCols}
@@ -3218,19 +3236,19 @@ module.exports = function register(socket, ctx) {
 
     const replyMap = new Map();
     if (replyIds.length > 0) {
-      const ph = replyIds.map(() => '?').join(',');
+      // Bizarre Bazaar fork: the lists here are bound as one JSON array
+      // (src/bazaarSqlList.js); a blog topic still comes whole.
       db.prepare(`${REPLY_CONTEXT_SELECT}
-        WHERE m.id IN (${ph})
-      `).all(...replyIds).forEach(r => replyMap.set(r.id, toReplyContext(r)));
+        WHERE m.id ${IN_JSON}
+      `).all(jsonList(replyIds)).forEach(r => replyMap.set(r.id, toReplyContext(r)));
     }
 
     const reactionMap = new Map();
     if (msgIds.length > 0) {
-      const ph = msgIds.map(() => '?').join(',');
       db.prepare(`
         SELECT r.message_id, r.emoji, r.user_id, COALESCE(u.display_name, u.username) as username
-        FROM reactions r JOIN users u ON r.user_id = u.id WHERE r.message_id IN (${ph}) ORDER BY r.id
-      `).all(...msgIds).forEach(r => {
+        FROM reactions r JOIN users u ON r.user_id = u.id WHERE r.message_id ${IN_JSON} ORDER BY r.id
+      `).all(jsonList(msgIds)).forEach(r => {
         if (!reactionMap.has(r.message_id)) reactionMap.set(r.message_id, []);
         reactionMap.get(r.message_id).push({ emoji: r.emoji, user_id: r.user_id, username: r.username });
       });
@@ -3241,12 +3259,11 @@ module.exports = function register(socket, ctx) {
     // Edit tags entry on the image menu (#5682).
     const threadTagMap = new Map();
     if (msgIds.length > 0) {
-      const ph = msgIds.map(() => '?').join(',');
       db.prepare(`
         SELECT at.message_id, ut.name
         FROM attachment_tags at JOIN upload_tags ut ON ut.id = at.tag_id
-        WHERE at.message_id IN (${ph}) ORDER BY ut.name_norm
-      `).all(...msgIds).forEach(r => {
+        WHERE at.message_id ${IN_JSON} ORDER BY ut.name_norm
+      `).all(jsonList(msgIds)).forEach(r => {
         if (!threadTagMap.has(r.message_id)) threadTagMap.set(r.message_id, []);
         const arr = threadTagMap.get(r.message_id);
         if (!arr.includes(r.name)) arr.push(r.name);
@@ -3255,7 +3272,7 @@ module.exports = function register(socket, ctx) {
 
     // Bizarre Bazaar fork: which replies are pinned in this topic, and which
     // are official (src/messageHighlights.js), as channel history has them.
-    const bzPinned = new Set(msgIds.length ? db.prepare(`SELECT message_id FROM pinned_messages WHERE message_id IN (${msgIds.map(() => '?').join(',')})`).all(...msgIds).map(r => r.message_id) : []);
+    const bzPinned = new Set(msgIds.length ? db.prepare(`SELECT message_id FROM pinned_messages WHERE message_id ${IN_JSON}`).all(jsonList(msgIds)).map(r => r.message_id) : []);
     const bzHighlights = highlights.lookup(db, msgIds);
     const enriched = messages.map(m => {
       const obj = { ...m };

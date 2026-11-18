@@ -64,7 +64,8 @@ test('a long thread comes in pages of 150, oldest page last', async () => {
   assert.equal(stray.messages.length, 0);
   assert.equal(stray.hasMore, false);
 
-  // A client that does not ask for pages (an older app) gets the whole thread, as upstream.
+  // A client that does not ask for pages (the Android app) gets the whole thread, up to
+  // its newest 1,000 replies (test/bazaarBigData.test.js).
   const whole = h.next(S, 'thread-messages', (d) => d && d.parentId === parentId && !d.before && d.messages.length === 320);
   S.emit('get-thread-messages', { parentId });
   const all = await whole;

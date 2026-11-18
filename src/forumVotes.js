@@ -14,6 +14,8 @@
  * on brings the counts back.
  */
 
+const { IN_JSON, jsonList } = require('./bazaarSqlList'); // Bizarre Bazaar fork
+
 const MODES = { off: 0, likes: 1, both: 2 };
 const MODE_NAMES = ['off', 'likes', 'both'];
 
@@ -43,12 +45,14 @@ function totalsOf(db, messageId) {
 function votesFor(db, userId, ids) {
   const out = new Map();
   if (!ids.length) return out;
-  const ph = ids.map(() => '?').join(',');
+  // Bizarre Bazaar fork: one JSON parameter, so a blog post with thousands
+  // of pieces (a topic copied from Discord) still fits.
+  const list = jsonList(ids);
   for (const r of db.prepare(`SELECT message_id, SUM(value = 1) AS likes, SUM(value = -1) AS dislikes
-    FROM forum_votes WHERE message_id IN (${ph}) GROUP BY message_id`).all(...ids)) {
+    FROM forum_votes WHERE message_id ${IN_JSON} GROUP BY message_id`).all(list)) {
     out.set(r.message_id, { likes: r.likes, dislikes: r.dislikes, mine: 0 });
   }
-  for (const r of db.prepare(`SELECT message_id, value FROM forum_votes WHERE user_id = ? AND message_id IN (${ph})`).all(userId, ...ids)) {
+  for (const r of db.prepare(`SELECT message_id, value FROM forum_votes WHERE user_id = ? AND message_id ${IN_JSON}`).all(userId, list)) {
     const v = out.get(r.message_id);
     if (v) v.mine = r.value;
   }

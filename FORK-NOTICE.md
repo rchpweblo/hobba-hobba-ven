@@ -344,3 +344,15 @@ pin sync next to upstream's new reaction sync.)
   `public/js/modules/app-bazaar-save-formats.js`, `app-media.js` (Save entry, `_saveContextImage`),
   `app-message-content.js` (video controls), `public/js/app.js`, `public/locales/en.json`.
   Test: `test/bazaarMediaConvert.test.js`.
+- **Big topics and channels.** A client that cannot page a topic's replies (the Android app)
+  gets its newest 1,000 replies (`hasMore` says there are older ones); before, a topic copied
+  from Discord with more than 32,766 replies failed to open at all, since SQLite takes at most
+  that many `?` parameters. A blog-mode topic still comes whole, and the lookups it runs
+  (reply context, reactions, Discord reactions, tags, pins, official marks, picture votes) bind
+  their id list as one JSON array (`IN (SELECT value FROM json_each(?))`), so it opens at any
+  size. Every other one-`?`-per-item list in the server was checked and is bounded (a page, a
+  capped selection, the server's users/roles/channels); a test counts them per file so a new
+  one gets the same check.
+  Files: `src/bazaarSqlList.js`, `src/socketHandlers/messages.js` (get-thread-messages),
+  `src/messageHighlights.js`, `src/ferryReactions.js`, `src/forumVotes.js`.
+  Tests: `test/bazaarBigData.test.js`, `test/bazaarSqlLists.test.js`.

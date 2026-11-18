@@ -11,6 +11,8 @@
 // The client still sends highlight: true per message, so the server never
 // marks anything the sender did not ask for. Off unless the person turns it on.
 
+const { IN_JSON, jsonList } = require('./bazaarSqlList'); // Bizarre Bazaar fork
+
 function ensureTable(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS message_highlights (
@@ -48,12 +50,12 @@ function setOfficialMode(db, userId, on) {
 function lookup(db, messageIds) {
   const out = new Map();
   if (!messageIds || !messageIds.length) return out;
-  const ph = messageIds.map(() => '?').join(',');
+  // Bizarre Bazaar fork: one JSON parameter, so a whole long topic fits.
   db.prepare(`
     SELECT h.message_id, r.name, r.color, r.color2, r.color_shimmer
     FROM message_highlights h LEFT JOIN roles r ON r.id = h.role_id
-    WHERE h.message_id IN (${ph})
-  `).all(...messageIds).forEach(r => out.set(r.message_id, toPayload(r)));
+    WHERE h.message_id ${IN_JSON}
+  `).all(jsonList(messageIds)).forEach(r => out.set(r.message_id, toPayload(r)));
   return out;
 }
 
