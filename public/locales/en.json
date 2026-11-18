@@ -5140,6 +5140,10 @@
     "result_toast": "The Role Bot gave you {{count}} role(s)",
     "result_none": "Discord linked. The Role Bot found no new roles to give you"
   },
+  "bazaar_composer": {
+    "right_buttons": "Right side message buttons",
+    "right_buttons_hint": "The bar of buttons (upload, emoji, GIF and the rest) sits on the right of the message box, between it and the Send button."
+  },
   "bazaar_save": {
     "title": "Save as",
     "original": "Original",

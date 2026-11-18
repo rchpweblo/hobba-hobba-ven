@@ -80,6 +80,7 @@ import ForumMethods    from './modules/app-forum.js?v=4.29.55-bazaar-1';
 import BazaarRoleBotMethods from './modules/app-bazaar-role-bot.js?v=bazaar-3'; // Bizarre Bazaar fork
 import BazaarEventMethods from './modules/app-bazaar-events.js?v=bazaar-2'; // Bizarre Bazaar fork
 import BazaarSaveFormatMethods from './modules/app-bazaar-save-formats.js?v=bazaar-1'; // Bizarre Bazaar fork
+import BazaarComposerSideMethods from './modules/app-bazaar-composer-side.js?v=bazaar-1'; // Bizarre Bazaar fork
 import BazaarDiscordRefMethods from './modules/app-bazaar-discord-refs.js?v=bazaar-3'; // Bizarre Bazaar fork
 import BazaarVoiceBubbleMethods from './modules/app-bazaar-voice-bubble.js?v=bazaar-3'; // Bizarre Bazaar fork
 import BazaarThreadPageMethods from './modules/app-bazaar-thread-pages.js?v=bazaar-3'; // Bizarre Bazaar fork
@@ -508,6 +509,7 @@ class HavenApp {
     this._bazaarSetupThreadPins(); // Bizarre Bazaar fork
     this._bazaarSetupBanners(); // Bizarre Bazaar fork
     this._bazaarSetupThreadMenu(); // Bizarre Bazaar fork
+    this._bazaarSetupComposerSide(); // Bizarre Bazaar fork
     this._initMoveMessages();
     this._initMoveToThread();
     this._initUnthread();
@@ -675,6 +677,7 @@ Object.assign(HavenApp.prototype,
   BazaarRoleBotMethods,
   BazaarEventMethods,
   BazaarSaveFormatMethods,
+  BazaarComposerSideMethods,
   BazaarDiscordRefMethods,
   BazaarVoiceBubbleMethods,
   BazaarThreadPageMethods,

@@ -356,3 +356,13 @@ pin sync next to upstream's new reaction sync.)
   Files: `src/bazaarSqlList.js`, `src/socketHandlers/messages.js` (get-thread-messages),
   `src/messageHighlights.js`, `src/ferryReactions.js`, `src/forumVotes.js`.
   Tests: `test/bazaarBigData.test.js`, `test/bazaarSqlLists.test.js`.
+- **Right side message buttons.** A toggle under Settings > Layout & Density > Message Box
+  moves the message box's button bar (upload, emoji, GIF, poll and the rest, or the folded +)
+  to the right of the box, between it and the Send button; the emoji, GIF and formatting
+  pickers open from the right edge to match (not on phones, where they span the screen). Kept
+  per browser like the other Message Box options. A browser that never had it set asks once
+  through session-info (`bazaarNewAccount`): accounts made from 2026-11-18 on start with it on,
+  older members keep the bar on the left until they turn it on.
+  Files: `public/js/modules/app-bazaar-composer-side.js` (its CSS is injected from there),
+  `src/bazaarComposerSide.js`, `src/socketHandlers/index.js` (session-info), `public/app.html`,
+  `public/js/app.js`, `public/locales/en.json`. Test: `test/bazaarComposerSide.test.js`.

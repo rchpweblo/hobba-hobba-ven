@@ -2313,7 +2313,9 @@ function setupSocketHandlers(io, db, opts = {}) {
       // official mode on, and what the server supports, for clients that talk
       // to servers of different versions.
       officialMode: highlights.officialMode(db, socket.user.id),
-      features: highlights.FEATURES
+      features: highlights.FEATURES,
+      // Bizarre Bazaar fork: new accounts start with the message buttons on the right.
+      bazaarNewAccount: require('../bazaarComposerSide').isNewAccount(db, socket.user.id)
     });
 
     // Send current voice counts for sidebar indicators.
