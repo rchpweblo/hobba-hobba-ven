@@ -29,12 +29,13 @@ const msgRow = (content, replyTo = null) => db.prepare('INSERT INTO messages (ch
 const person = (id, username, extra = {}) => ({ id, username, global_name: null, ...extra });
 const discordMsg = (content, mentions, extra = {}) => ({ id: '420000000000000001', content, mentions, author: person('430000000000000001', 'sam', { global_name: 'Sam' }), ...extra });
 
-test('person codes are kept and their Discord names saved', () => {
+test('person codes are kept (a linked person as @login) and their Discord names saved', () => {
   const msg = discordMsg(`hi <@!${D.stranger}> and <@${D.ted}>`, [
     person(D.stranger, 'strangerdisc', { global_name: 'Stranger', member: { nick: 'Stranger Nick' } }),
     person(D.ted, 'teddisc'),
   ]);
-  assert.equal(pings.keepPersonCodes(db, msg.content, msg), `hi <@${D.stranger}> and <@${D.ted}>`);
+  // Ted linked Discord, so he is a Haven @mention (src/bazaarLinkedMentions.js).
+  assert.equal(pings.keepPersonCodes(db, msg.content, msg), `hi <@${D.stranger}> and @ted`);
   const name = (id) => db.prepare("SELECT name FROM bazaar_discord_names WHERE kind = 'user' AND discord_id = ?").get(id)?.name;
   assert.equal(name(D.stranger), 'Stranger Nick', 'the server nickname is the name Discord shows there');
   assert.equal(name(D.ted), 'teddisc');

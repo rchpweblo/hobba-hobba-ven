@@ -6,12 +6,15 @@
 
 const { groupHistoryFloor, groupHistoryFloorAsync } = require('../groupHistory');
 const forumUnread = require('../forumUnread');
-const { unreadMentionsQuery } = require('../mentionFilter');
+const { unreadMentionsQuery: upstreamUnreadMentionsQuery } = require('../mentionFilter');
+const bazaarLinkedMentions = require('../bazaarLinkedMentions'); // Bizarre Bazaar fork
 const automod = require('../automod');
 const createPermissions = require('./permissions');
 const createAsyncPermissions = require('./asyncPermissions');
 
 module.exports = function createChannelLists({ db, userHasPermission, roleGateAllows, getUserEffectiveLevel = createPermissions(db).getUserEffectiveLevel }) {
+  // Bizarre Bazaar fork: old Discord mentions rewritten for a linked person never count as unread mentions (src/bazaarLinkedMentions.js).
+  const unreadMentionsQuery = (...args) => bazaarLinkedMentions.quiet(db, upstreamUnreadMentionsQuery(...args));
   function getChannelRows(userId, isAdmin) {
     // Holders of 'view_all_channels' (e.g. a server-wide Mod role) get the
     // same visibility treatment as the admin: every non-DM channel, with

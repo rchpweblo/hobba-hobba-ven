@@ -1656,7 +1656,8 @@ function setupSocketHandlers(io, db, opts = {}) {
    */
   function ferryReactionChanged({ messageId, channelId, emoji, added }) {
     const cfg = ferry.getConfig();
-    if (!cfg.enabled || !cfg.token || !ferryLinksFor(channelId).length) return;
+    // Bizarre Bazaar fork: a sub-channel sends through its parent's pairing (src/bazaarFerryReactions.js).
+    if (!cfg.enabled || !cfg.token || !(ferryLinksFor(channelId).length || require('../bazaarFerryReactions').sendsOut(db, channelId))) return;
     try {
       const adminRow = db.prepare('SELECT is_admin FROM users WHERE id = ?');
       const mayUse = (uid) => !!adminRow.get(uid)?.is_admin || userHasPermission(uid, 'use_ferry', channelId);
@@ -2962,6 +2963,8 @@ function setupSocketHandlers(io, db, opts = {}) {
 
   // Bizarre Bazaar fork: what the Role Bot's link callback refreshes with (src/bazaarRoleBot.js).
   require('../bazaarRoleBot').attach({ io, db, roleRefresh, syncRoleGateMemberships });
+  // Bizarre Bazaar fork: linked people's Discord codes as @mentions, a little after start (src/bazaarLinkedMentions.js).
+  setTimeout(() => require('../bazaarLinkedMentions').reconcile(db), 15000).unref?.();
   // Bizarre Bazaar fork: scheduled events' clock and notifications (src/bazaarEvents.js).
   require('../bazaarEvents').attach({ io, db, state, sendPushNotifications });
 

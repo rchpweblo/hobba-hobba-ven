@@ -1164,6 +1164,7 @@ function initDatabase() {
   migrateBazaarForum(addColumn);
   migrateBazaarRoleExclude(addColumn);
   migrateBazaarRoleBot(db);
+  require('./bazaarLinkedMentions').ensureSchema(db);
   migrateBazaarEvents(db);
   migrateBazaarDiscordRefs(db);
   migrateBazaarFerryThreads(db);

@@ -15,8 +15,11 @@
 //
 // Which Discord message a Haven message is comes from ferry_message_map
 // (src/ferryReplies.js), so only messages Ferry carried take part.
+// Bizarre Bazaar fork: copied history, sub-channels and thread replies take
+// part too (src/bazaarFerryReactions.js).
 
 const { IN_JSON, jsonList } = require('./bazaarSqlList'); // Bizarre Bazaar fork
+const bazaarFerryReactions = require('./bazaarFerryReactions'); // Bizarre Bazaar fork
 
 const SNOWFLAKE = /^\d{5,25}$/;
 const NAMED = /^:([a-zA-Z0-9_-]{1,30}):$/;
@@ -43,9 +46,14 @@ function ensureSchema(db) {
 
 function discordRows(db, messageIds) {
   if (!messageIds.length) return [];
-  // Bizarre Bazaar fork: one JSON parameter, so a whole long topic fits.
-  return db.prepare(`SELECT message_id, emoji, discord_user_id, name FROM ferry_reactions
-    WHERE message_id ${IN_JSON} ORDER BY created_at, rowid`).all(jsonList(messageIds));
+  // Bizarre Bazaar fork: one JSON parameter, so a whole long topic fits. A
+  // Discord person linked to a Haven account (src/bazaarRoleBot.js) shows by
+  // their Haven name.
+  return db.prepare(`SELECT r.message_id, r.emoji, r.discord_user_id,
+      COALESCE((SELECT COALESCE(NULLIF(u.display_name, ''), u.username) FROM bazaar_discord_links l
+                JOIN users u ON u.id = l.user_id WHERE l.discord_id = r.discord_user_id AND l.source != 'none'), r.name) AS name
+    FROM ferry_reactions r
+    WHERE r.message_id ${IN_JSON} ORDER BY r.created_at, r.rowid`).all(jsonList(messageIds));
 }
 
 const asEntry = (r) => ({ emoji: r.emoji, user_id: `discord:${r.discord_user_id}`, username: r.name + MARK });
@@ -78,14 +86,8 @@ function listFor(db, messageId) {
 // The Haven copies of a Discord message, in channels whose pairing carries
 // Discord into Haven.
 function havenCopies(db, discordMessageId) {
-  return db.prepare(`
-    SELECT DISTINCT m.id, m.channel_id, c.code FROM messages m
-    JOIN channels c ON c.id = m.channel_id
-    WHERE m.id IN (SELECT haven_message_id FROM ferry_message_map WHERE discord_message_id = ?
-                   UNION SELECT id FROM messages WHERE discord_message_id = ?)
-      AND EXISTS (SELECT 1 FROM ferry_links f WHERE f.channel_id = m.channel_id AND f.is_active = 1
-                  AND f.direction IN ('both', 'to_haven'))
-  `).all(discordMessageId, discordMessageId);
+  // Bizarre Bazaar fork: copied history, sub-channels and threads too (src/bazaarFerryReactions.js).
+  return bazaarFerryReactions.havenCopies(db, discordMessageId);
 }
 
 // A Discord emoji as Haven writes it: Unicode as is, a custom one as :name:
@@ -151,12 +153,8 @@ function discordEmojiFor(emoji, guildEmojis) {
 // The Discord messages a Haven message went out as (or came from), in
 // pairings that carry Haven out to Discord.
 function discordCopies(db, havenMessageId) {
-  return db.prepare(`
-    SELECT DISTINCT f.discord_message_id, f.discord_channel_id, l.guild_id FROM ferry_message_map f
-    JOIN messages m ON m.id = f.haven_message_id
-    JOIN ferry_links l ON l.channel_id = m.channel_id AND l.is_active = 1 AND l.direction IN ('both', 'to_discord')
-    WHERE f.haven_message_id = ?
-  `).all(havenMessageId);
+  // Bizarre Bazaar fork: copied history, sub-channels and threads too (src/bazaarFerryReactions.js).
+  return bazaarFerryReactions.discordCopies(db, havenMessageId);
 }
 
 /**

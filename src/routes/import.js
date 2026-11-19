@@ -559,7 +559,11 @@ module.exports = function registerImport(deps) {
   // failure with how much got in, and running the import again finishes it.
   async function writeImport(job, user, tempPath, selectedChannels, { copyFiles = false } = {}) {
     const stats = { channelsCreated: 0, channelsReused: 0, messagesImported: 0, messagesSkipped: 0, threadsImported: 0, filesCopied: 0, filesLeftAsLinks: 0, diskFull: false };
-    const finish = (status, body) => Object.assign(job, { state: 'done', status, body, updatedAt: Date.now() });
+    const finish = (status, body) => {
+      Object.assign(job, { state: 'done', status, body, updatedAt: Date.now() });
+      // Bizarre Bazaar fork: linked people's Discord codes in what came in become @mentions (src/bazaarLinkedMentions.js).
+      try { require('../bazaarLinkedMentions').reconcile(require('../database').getDb()); } catch (err) { console.warn('[import] linked mentions:', err.message); }
+    };
     const nextBatch = () => {
       job.updatedAt = Date.now();
       return new Promise(resolve => setImmediate(resolve));

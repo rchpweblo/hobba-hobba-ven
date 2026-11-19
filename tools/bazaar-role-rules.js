@@ -42,7 +42,9 @@ function main() {
     } else {
       const u = db.prepare('SELECT id FROM users WHERE username = ? COLLATE NOCASE').get(argv[1] || '');
       if (!u) throw new Error(`no user named ${argv[1]}`);
-      console.log(bot.resetLink(db, u.id) ? `${argv[1]} can link Discord again.` : `${argv[1]} had not linked Discord.`);
+      console.log(bot.resetLink(db, u.id)
+        ? `${argv[1]} can link Discord again. Their Discord @mentions go back to Discord codes the next time Haven starts.`
+        : `${argv[1]} had not linked Discord.`);
     }
   } catch (err) {
     console.error(err.message);

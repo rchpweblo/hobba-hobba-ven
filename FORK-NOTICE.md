@@ -366,3 +366,27 @@ pin sync next to upstream's new reaction sync.)
   Files: `public/js/modules/app-bazaar-composer-side.js` (its CSS is injected from there),
   `src/bazaarComposerSide.js`, `src/socketHandlers/index.js` (session-info), `public/app.html`,
   `public/js/app.js`, `public/locales/en.json`. Test: `test/bazaarComposerSide.test.js`.
+- **Discord @mentions of linked people are Haven @mentions.** When someone links Discord
+  through the Role Bot, every message from Discord (copied history and Ferry) that mentions
+  them as Discord's `<@id>` is rewritten as `@theirlogin`, so it turns up in search and on
+  their @ list (mentions:me). New and edited Ferry messages are written that way from the
+  start. It runs on a link, after an import and a little after each start; a login change or
+  a removed link (`tools/bazaar-role-rules.js reset`, a deleted account) is followed, back to
+  the code if need be. Only messages that belong to no Haven account are touched, so nothing
+  goes back to Discord, and there is no edited mark. Old messages rewritten this way never
+  light up an unread @mention mark in the channel list. Files: `src/bazaarLinkedMentions.js`,
+  `src/bazaarFerryPings.js`, `src/socketHandlers/channelList.js`, `src/bazaarDiscordLinkRoutes.js`,
+  `src/routes/import.js`, `src/socketHandlers/index.js`, `src/database.js`. Test:
+  `test/bazaarLinkedMentions.test.js`.
+- **Reactions on all of history, sub-channels and threads.** Upstream Ferry carries
+  reactions only on messages it carried itself, in channels with a pairing of their own.
+  Here they also cross on copied history (by `messages.discord_message_id`), in sub-channels
+  made for a Discord thread (through the parent's pairing) and on thread and forum-topic
+  replies (the Discord thread is the mapped one, or the id of the thread's first message). A
+  linked Discord person's reaction shows under their Haven name. `tools/bazaar-reaction-sync.js`
+  puts the reactions already there in line with Discord's: the importer had written every
+  Discord reaction under the admin who ran the import, one per emoji; those become the real
+  people, reactions since added or taken off on Discord follow, and Haven reactions Discord
+  never saw get the bot's. Run it again after a Discord import. Files:
+  `src/bazaarFerryReactions.js`, `src/bazaarReactionSync.js`, `src/ferryReactions.js`,
+  `src/socketHandlers/index.js`. Test: `test/bazaarReactionSync.test.js`.
